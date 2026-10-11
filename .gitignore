@@ -1,0 +1,9 @@
+node_modules
+client/node_modules
+client/dist
+server/workouts.db*
+.env
+.env.local
+.DS_Store
+Thumbs.db
+*.log

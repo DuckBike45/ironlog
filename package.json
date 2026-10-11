@@ -1,0 +1,23 @@
+{
+  "name": "workout-tracker",
+  "version": "1.0.0",
+  "description": "Personal mobile-first weightlifting workout tracker",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "server": "node --watch server/index.js",
+    "client": "npm --prefix client run dev",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "build": "npm --prefix client run build",
+    "seed": "node server/seed.js",
+    "test": "node test_workout_flow.js"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "cors": "^2.8.5",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
