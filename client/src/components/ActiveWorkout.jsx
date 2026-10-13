@@ -213,40 +213,43 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   return (
     <div className="pb-28">
-      {/* Top Header Bar */}
-      <div className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
-        <div>
-          <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
-            Active Workout
+      {/* Sticky Top Header Area (Workout Stats + Floating Rest Timer) */}
+      <div className="sticky top-0 z-30 shadow-md">
+        <div className="bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
+          <div>
+            <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
+              Active Workout
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span className="font-mono text-lg font-black text-white">
+                {formatDuration(elapsedSeconds)}
+              </span>
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span className="font-mono text-lg font-black text-white">
-              {formatDuration(elapsedSeconds)}
-            </span>
+            <button
+              onClick={() => onDiscardWorkout(workout.id)}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 active:scale-95"
+            >
+              Discard
+            </button>
+            <button
+              onClick={() => setShowFinishModal(true)}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-1.5"
+            >
+              <Check className="w-4 h-4 stroke-[3]" />
+              Finish
+            </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => onDiscardWorkout(workout.id)}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 active:scale-95"
-          >
-            Discard
-          </button>
-          <button
-            onClick={() => setShowFinishModal(true)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-1.5"
-          >
-            <Check className="w-4 h-4 stroke-[3]" />
-            Finish
-          </button>
-        </div>
+        {/* Floating Rest Timer bar anchored at top */}
+        <RestTimer />
       </div>
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
-        {/* Rest Timer (2:00 manual timer) */}
-        <RestTimer />
 
         {/* Exercises List */}
         {workout.exercises && workout.exercises.length === 0 ? (
@@ -443,7 +446,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 {/* FAST SET ENTRY FORM (The Ergonomic Core) */}
                 <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
                   <div className="grid grid-cols-2 gap-2.5">
-                    {/* Weight Input & Steppers */}
+                    {/* Weight Input */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-slate-400 uppercase">Weight (KG)</label>
@@ -454,38 +457,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                         inputMode="decimal"
                         value={currentInput.weight}
                         onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5 text-lg font-mono font-black text-center focus:outline-none focus:border-blue-500"
+                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-xl font-mono font-black text-center focus:outline-none focus:border-blue-500"
                       />
-                      {/* Weight Steppers (Standard Plates) */}
-                      <div className="grid grid-cols-4 gap-1 pt-0.5">
-                        <button
-                          onClick={() => handleAdjustWeight(we.id, -2.5)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          -2.5
-                        </button>
-                        <button
-                          onClick={() => handleAdjustWeight(we.id, 1.25)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          +1.25
-                        </button>
-                        <button
-                          onClick={() => handleAdjustWeight(we.id, 2.5)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          +2.5
-                        </button>
-                        <button
-                          onClick={() => handleAdjustWeight(we.id, 5.0)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          +5
-                        </button>
-                      </div>
                     </div>
 
-                    {/* Reps Input & Steppers */}
+                    {/* Reps Input */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-bold text-slate-400 uppercase">Reps</label>
@@ -495,23 +471,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                         inputMode="numeric"
                         value={currentInput.reps}
                         onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-2.5 text-lg font-mono font-black text-center focus:outline-none focus:border-blue-500"
+                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-xl font-mono font-black text-center focus:outline-none focus:border-blue-500"
                       />
-                      {/* Reps Steppers */}
-                      <div className="grid grid-cols-2 gap-1 pt-0.5">
-                        <button
-                          onClick={() => handleAdjustReps(we.id, -1)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          -1 Rep
-                        </button>
-                        <button
-                          onClick={() => handleAdjustReps(we.id, 1)}
-                          className="py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold rounded-lg active:scale-95"
-                        >
-                          +1 Rep
-                        </button>
-                      </div>
                     </div>
                   </div>
 
