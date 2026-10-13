@@ -26,7 +26,12 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   // Calculate elapsed workout time
   useEffect(() => {
-    const startTime = new Date(workout.started_at).getTime();
+    // If started_at has no Z or timezone, append Z so browsers treat it as UTC
+    let raw = workout.started_at || '';
+    if (raw && !raw.endsWith('Z') && !raw.includes('+')) {
+      raw = raw.replace(' ', 'T') + 'Z';
+    }
+    const startTime = new Date(raw).getTime() || Date.now();
     const updateElapsed = () => {
       const now = Date.now();
       setElapsedSeconds(Math.max(0, Math.floor((now - startTime) / 1000)));
@@ -213,39 +218,39 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   return (
     <div className="pb-28">
-      {/* Sticky Top Header Area (Workout Stats + Floating Rest Timer) */}
-      <div className="sticky top-0 z-30 shadow-md">
-        <div className="bg-slate-950/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
-          <div>
-            <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
-              Active Workout
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span className="font-mono text-lg font-black text-white">
-                {formatDuration(elapsedSeconds)}
-              </span>
-            </div>
+      {/* Top Header Bar (Scrolls away with page) */}
+      <div className="bg-slate-950 border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
+            Active Workout
           </div>
-
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => onDiscardWorkout(workout.id)}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 active:scale-95"
-            >
-              Discard
-            </button>
-            <button
-              onClick={() => setShowFinishModal(true)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-1.5"
-            >
-              <Check className="w-4 h-4 stroke-[3]" />
-              Finish
-            </button>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span className="font-mono text-lg font-black text-white">
+              {formatDuration(elapsedSeconds)}
+            </span>
           </div>
         </div>
 
-        {/* Floating Rest Timer bar anchored at top */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onDiscardWorkout(workout.id)}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 active:scale-95"
+          >
+            Discard
+          </button>
+          <button
+            onClick={() => setShowFinishModal(true)}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-1.5"
+          >
+            <Check className="w-4 h-4 stroke-[3]" />
+            Finish
+          </button>
+        </div>
+      </div>
+
+      {/* Floating Rest Timer bar (Only this sticks to top when scrolling) */}
+      <div className="sticky top-0 z-30 shadow-md">
         <RestTimer />
       </div>
 

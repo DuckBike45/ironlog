@@ -372,9 +372,10 @@ app.post('/api/workouts/start', async (req, res) => {
     }
 
     const defaultName = name.trim() || `Workout - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const nowIso = new Date().toISOString();
     const result = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, CURRENT_TIMESTAMP, ?)',
-      args: [defaultName, userId || null],
+      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, ?, ?)',
+      args: [defaultName, nowIso, userId || null],
     });
 
     const workout = await getFullWorkoutDetails(Number(result.lastInsertRowid));
@@ -929,9 +930,10 @@ app.post('/api/templates/:id/start', async (req, res) => {
     }
 
     const template = tplRes.rows[0];
+    const nowIso = new Date().toISOString();
     const workoutRes = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, CURRENT_TIMESTAMP, ?)',
-      args: [template.name, userId || null],
+      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, ?, ?)',
+      args: [template.name, nowIso, userId || null],
     });
     const workoutId = Number(workoutRes.lastInsertRowid);
 
