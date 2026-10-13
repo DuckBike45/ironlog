@@ -1,12 +1,20 @@
 const BASE_URL = '/api';
 
+let currentUserId = null;
+
 async function request(endpoint, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  if (currentUserId !== null && currentUserId !== undefined) {
+    headers['X-User-ID'] = String(currentUserId);
+  }
+
   const res = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
     ...options,
+    headers,
   });
 
   if (!res.ok) {
@@ -22,6 +30,28 @@ async function request(endpoint, options = {}) {
 }
 
 export const api = {
+  // Session & User Context
+  setUserId: (id) => {
+    currentUserId = id;
+  },
+
+  getUserId: () => currentUserId,
+
+  // Auth & Profile
+  verifyPin: (pin) =>
+    request('/auth/verify', {
+      method: 'POST',
+      body: JSON.stringify({ pin }),
+    }),
+
+  getUsers: () => request('/users'),
+
+  createUser: (name) =>
+    request('/users', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+
   // Exercises
   getExercises: (search = '', category = '') => {
     const params = new URLSearchParams();

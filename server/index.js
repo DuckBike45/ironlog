@@ -21,6 +21,90 @@ app.use(async (req, res, next) => {
   }
 });
 
+// User identification middleware from X-User-ID header
+app.use((req, res, next) => {
+  const headerVal = req.headers['x-user-id'];
+  req.userId = headerVal ? parseInt(headerVal, 10) || null : null;
+  next();
+});
+
+// ==========================================
+// 0. Auth & Users Endpoints
+// ==========================================
+
+// Verify 6-digit PIN
+app.post('/api/auth/verify', async (req, res) => {
+  try {
+    const { pin } = req.body;
+    if (!pin) {
+      return res.status(400).json({ error: 'PIN is required' });
+    }
+
+    const familyPin = process.env.FAMILY_PIN || '123456';
+    const demoPin = process.env.DEMO_PIN || '000000';
+
+    if (String(pin).trim() === String(familyPin).trim()) {
+      return res.json({ mode: 'family' });
+    }
+
+    if (String(pin).trim() === String(demoPin).trim()) {
+      // Find or create demo user
+      let demoUser = await db.execute('SELECT id, name FROM users WHERE is_demo = 1 LIMIT 1');
+      if (demoUser.rows.length === 0) {
+        const createRes = await db.execute({
+          sql: 'INSERT INTO users (name, is_demo) VALUES (?, 1)',
+          args: ['Demo Guest'],
+        });
+        const newId = Number(createRes.lastInsertRowid);
+        return res.json({ mode: 'demo', user: { id: newId, name: 'Demo Guest' } });
+      }
+      return res.json({ mode: 'demo', user: demoUser.rows[0] });
+    }
+
+    return res.status(401).json({ error: 'Invalid PIN' });
+  } catch (err) {
+    console.error('Error verifying PIN:', err);
+    res.status(500).json({ error: 'Failed to verify PIN' });
+  }
+});
+
+// List profiles (excluding demo user)
+app.get('/api/users', async (req, res) => {
+  try {
+    const result = await db.execute('SELECT id, name, created_at FROM users WHERE is_demo = 0 ORDER BY id ASC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Create a new profile
+app.post('/api/users', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const trimmed = name.trim();
+    const result = await db.execute({
+      sql: 'INSERT INTO users (name, is_demo) VALUES (?, 0)',
+      args: [trimmed],
+    });
+
+    const newUser = await db.execute({
+      sql: 'SELECT id, name, created_at FROM users WHERE id = ?',
+      args: [Number(result.lastInsertRowid)],
+    });
+
+    res.status(201).json(newUser.rows[0]);
+  } catch (err) {
+    console.error('Error creating user:', err);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
 // ==========================================
 // 1. Health Check
 // ==========================================
@@ -36,6 +120,8 @@ app.get('/api/health', (req, res) => {
 app.get('/api/exercises', async (req, res) => {
   try {
     const { search, category } = req.query;
+    const userId = req.userId;
+
     let query = `
       SELECT 
         e.*,
@@ -50,6 +136,7 @@ app.get('/api/exercises', async (req, res) => {
         FROM workout_exercises we
         JOIN workouts w ON we.workout_id = w.id
         WHERE w.completed_at IS NOT NULL
+        ${userId ? 'AND w.user_id = ' + parseInt(userId, 10) : ''}
         GROUP BY we.exercise_id
       ) usage ON e.id = usage.exercise_id
       WHERE 1=1
@@ -115,6 +202,7 @@ app.get('/api/exercises/:id/last-performance', async (req, res) => {
   try {
     const exerciseId = parseInt(req.params.id, 10);
     const excludeWorkoutId = req.query.excludeWorkoutId ? parseInt(req.query.excludeWorkoutId, 10) : null;
+    const userId = req.userId;
 
     let workoutQuery = `
       SELECT w.id, w.name, w.completed_at
@@ -123,6 +211,11 @@ app.get('/api/exercises/:id/last-performance', async (req, res) => {
       WHERE we.exercise_id = ? AND w.completed_at IS NOT NULL
     `;
     const workoutArgs = [exerciseId];
+
+    if (userId) {
+      workoutQuery += ' AND w.user_id = ?';
+      workoutArgs.push(userId);
+    }
 
     if (excludeWorkoutId) {
       workoutQuery += ' AND w.id != ?';
@@ -164,25 +257,35 @@ app.get('/api/exercises/:id/last-performance', async (req, res) => {
 app.get('/api/exercises/:id/history', async (req, res) => {
   try {
     const exerciseId = parseInt(req.params.id, 10);
+    const userId = req.userId;
     const exRes = await db.execute({ sql: 'SELECT * FROM exercises WHERE id = ?', args: [exerciseId] });
     if (exRes.rows.length === 0) {
       return res.status(404).json({ error: 'Exercise not found' });
     }
 
+    let historySql = `
+      SELECT 
+        w.id AS workout_id,
+        w.name AS workout_name,
+        w.started_at,
+        w.completed_at,
+        we.id AS workout_exercise_id
+      FROM workouts w
+      JOIN workout_exercises we ON w.id = we.workout_id
+      WHERE we.exercise_id = ? AND w.completed_at IS NOT NULL
+    `;
+    const historyArgs = [exerciseId];
+
+    if (userId) {
+      historySql += ' AND w.user_id = ?';
+      historyArgs.push(userId);
+    }
+
+    historySql += ' ORDER BY w.completed_at DESC';
+
     const sessionsRes = await db.execute({
-      sql: `
-        SELECT 
-          w.id AS workout_id,
-          w.name AS workout_name,
-          w.started_at,
-          w.completed_at,
-          we.id AS workout_exercise_id
-        FROM workouts w
-        JOIN workout_exercises we ON w.id = we.workout_id
-        WHERE we.exercise_id = ? AND w.completed_at IS NOT NULL
-        ORDER BY w.completed_at DESC
-      `,
-      args: [exerciseId],
+      sql: historySql,
+      args: historyArgs,
     });
 
     const sessions = [];
@@ -224,9 +327,17 @@ app.get('/api/exercises/:id/history', async (req, res) => {
 // Get currently active workout (completed_at IS NULL)
 app.get('/api/workouts/active', async (req, res) => {
   try {
-    const activeRes = await db.execute(`
-      SELECT * FROM workouts WHERE completed_at IS NULL ORDER BY started_at DESC LIMIT 1
-    `);
+    const userId = req.userId;
+    let sql = 'SELECT * FROM workouts WHERE completed_at IS NULL';
+    const args = [];
+
+    if (userId) {
+      sql += ' AND user_id = ?';
+      args.push(userId);
+    }
+
+    sql += ' ORDER BY started_at DESC LIMIT 1';
+    const activeRes = await db.execute({ sql, args });
 
     if (activeRes.rows.length === 0) {
       return res.json(null);
@@ -244,8 +355,17 @@ app.get('/api/workouts/active', async (req, res) => {
 app.post('/api/workouts/start', async (req, res) => {
   try {
     const { name = '' } = req.body;
+    const userId = req.userId;
 
-    const existing = await db.execute('SELECT id FROM workouts WHERE completed_at IS NULL LIMIT 1');
+    let existingSql = 'SELECT id FROM workouts WHERE completed_at IS NULL';
+    const existingArgs = [];
+    if (userId) {
+      existingSql += ' AND user_id = ?';
+      existingArgs.push(userId);
+    }
+    existingSql += ' LIMIT 1';
+
+    const existing = await db.execute({ sql: existingSql, args: existingArgs });
     if (existing.rows.length > 0) {
       const full = await getFullWorkoutDetails(existing.rows[0].id);
       return res.json(full);
@@ -253,8 +373,8 @@ app.post('/api/workouts/start', async (req, res) => {
 
     const defaultName = name.trim() || `Workout - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const result = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at) VALUES (?, CURRENT_TIMESTAMP)',
-      args: [defaultName],
+      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, CURRENT_TIMESTAMP, ?)',
+      args: [defaultName, userId || null],
     });
 
     const workout = await getFullWorkoutDetails(Number(result.lastInsertRowid));
@@ -327,7 +447,8 @@ app.put('/api/workouts/:id', async (req, res) => {
 // List completed workouts history
 app.get('/api/workouts', async (req, res) => {
   try {
-    const workoutsRes = await db.execute(`
+    const userId = req.userId;
+    let query = `
       SELECT 
         w.id,
         w.name,
@@ -342,10 +463,21 @@ app.get('/api/workouts', async (req, res) => {
       LEFT JOIN workout_exercises we ON w.id = we.workout_id
       LEFT JOIN workout_sets ws ON we.id = ws.workout_exercise_id
       WHERE w.completed_at IS NOT NULL
+    `;
+    const args = [];
+
+    if (userId) {
+      query += ' AND w.user_id = ?';
+      args.push(userId);
+    }
+
+    query += `
       GROUP BY w.id
       ORDER BY w.completed_at DESC
       LIMIT 100
-    `);
+    `;
+
+    const workoutsRes = await db.execute({ sql: query, args });
 
     const result = [];
     for (const w of workoutsRes.rows) {
@@ -578,7 +710,17 @@ app.delete('/api/sets/:id', async (req, res) => {
 // List all templates
 app.get('/api/templates', async (req, res) => {
   try {
-    const tplRes = await db.execute('SELECT * FROM templates ORDER BY created_at DESC');
+    const userId = req.userId;
+    let sql = 'SELECT * FROM templates';
+    const args = [];
+
+    if (userId) {
+      sql += ' WHERE user_id = ?';
+      args.push(userId);
+    }
+
+    sql += ' ORDER BY created_at DESC';
+    const tplRes = await db.execute({ sql, args });
     const templates = [];
 
     for (const t of tplRes.rows) {
@@ -650,13 +792,14 @@ app.get('/api/templates/:id', async (req, res) => {
 app.post('/api/templates', async (req, res) => {
   try {
     const { name, notes = '', exercise_ids = [] } = req.body;
+    const userId = req.userId;
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Template name is required' });
     }
 
     const result = await db.execute({
-      sql: 'INSERT INTO templates (name, notes) VALUES (?, ?)',
-      args: [name.trim(), notes.trim()],
+      sql: 'INSERT INTO templates (name, notes, user_id) VALUES (?, ?, ?)',
+      args: [name.trim(), notes.trim(), userId || null],
     });
     const templateId = Number(result.lastInsertRowid);
 
@@ -761,12 +904,22 @@ app.delete('/api/templates/:id', async (req, res) => {
 app.post('/api/templates/:id/start', async (req, res) => {
   try {
     const templateId = parseInt(req.params.id, 10);
+    const userId = req.userId;
+
     const tplRes = await db.execute({ sql: 'SELECT * FROM templates WHERE id = ?', args: [templateId] });
     if (tplRes.rows.length === 0) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
-    const existing = await db.execute('SELECT id FROM workouts WHERE completed_at IS NULL LIMIT 1');
+    let existingSql = 'SELECT id FROM workouts WHERE completed_at IS NULL';
+    const existingArgs = [];
+    if (userId) {
+      existingSql += ' AND user_id = ?';
+      existingArgs.push(userId);
+    }
+    existingSql += ' LIMIT 1';
+
+    const existing = await db.execute({ sql: existingSql, args: existingArgs });
     if (existing.rows.length > 0) {
       const activeWorkout = await getFullWorkoutDetails(existing.rows[0].id);
       return res.status(400).json({
@@ -777,8 +930,8 @@ app.post('/api/templates/:id/start', async (req, res) => {
 
     const template = tplRes.rows[0];
     const workoutRes = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at) VALUES (?, CURRENT_TIMESTAMP)',
-      args: [template.name],
+      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, CURRENT_TIMESTAMP, ?)',
+      args: [template.name, userId || null],
     });
     const workoutId = Number(workoutRes.lastInsertRowid);
 

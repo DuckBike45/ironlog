@@ -1,13 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Dumbbell, Play, History, Sparkles, CheckCircle2, Plus, Settings } from 'lucide-react';
+import { Dumbbell, Play, History, Sparkles, CheckCircle2, Plus, Settings, Users, LogOut } from 'lucide-react';
 import { api } from './api';
 import ActiveWorkout from './components/ActiveWorkout';
 import WorkoutHistory from './components/WorkoutHistory';
 import ExerciseLibrary from './components/ExerciseLibrary';
 import Navigation from './components/Navigation';
 import TemplateManager from './components/TemplateManager';
+import PinEntry from './components/PinEntry';
+import ProfileSelector from './components/ProfileSelector';
 
 export default function App() {
+  // Auth state persisted in sessionStorage
+  const [auth, setAuth] = useState(() => {
+    try {
+      const stored = sessionStorage.getItem('ironlog_auth');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [activeTab, setActiveTab] = useState('workout');
   const [activeWorkout, setActiveWorkout] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -16,10 +28,17 @@ export default function App() {
   const [templates, setTemplates] = useState([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
 
+  // Sync API client user ID with auth state
   useEffect(() => {
-    checkActiveWorkout();
-    loadTemplates();
-  }, []);
+    if (auth && auth.userId) {
+      api.setUserId(auth.userId);
+      checkActiveWorkout();
+      loadTemplates();
+    } else {
+      api.setUserId(null);
+      setLoading(false);
+    }
+  }, [auth]);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -42,12 +61,54 @@ export default function App() {
       if (current) {
         setActiveWorkout(current);
         setActiveTab('workout');
+      } else {
+        setActiveWorkout(null);
       }
     } catch (err) {
       console.error('Failed to check active workout', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Auth Handlers
+  const handlePinSuccess = ({ mode, user }) => {
+    if (mode === 'demo') {
+      const authData = { mode: 'demo', userId: user.id, userName: user.name };
+      sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
+      setAuth(authData);
+    } else if (mode === 'family') {
+      const authData = { mode: 'family', userId: null, userName: null };
+      sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
+      setAuth(authData);
+    }
+  };
+
+  const handleProfileSelect = (user) => {
+    const authData = { mode: 'family', userId: user.id, userName: user.name };
+    sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
+    setAuth(authData);
+  };
+
+  const handleSwitchProfile = () => {
+    if (auth?.mode === 'demo') {
+      // Exit demo mode back to PIN screen
+      sessionStorage.removeItem('ironlog_auth');
+      setAuth(null);
+      setActiveWorkout(null);
+    } else {
+      // Family mode: go back to profile selection
+      const authData = { mode: 'family', userId: null, userName: null };
+      sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
+      setAuth(authData);
+      setActiveWorkout(null);
+    }
+  };
+
+  const handleResetPin = () => {
+    sessionStorage.removeItem('ironlog_auth');
+    setAuth(null);
+    setActiveWorkout(null);
   };
 
   const handleStartWorkout = async (e) => {
@@ -90,7 +151,7 @@ export default function App() {
       setActiveWorkout(null);
       showToast('Workout finished and saved to history! 💪');
       setActiveTab('history');
-      loadTemplates(); // refresh usage stats
+      loadTemplates();
     } catch (err) {
       alert(err.message || 'Failed to finish workout');
     }
@@ -109,6 +170,15 @@ export default function App() {
     }
   };
 
+  // Auth Gates
+  if (!auth) {
+    return <PinEntry onSuccess={handlePinSuccess} />;
+  }
+
+  if (auth.mode === 'family' && !auth.userId) {
+    return <ProfileSelector onSelect={handleProfileSelect} onSwitchPin={handleResetPin} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Toast Notification */}
@@ -118,6 +188,19 @@ export default function App() {
             <CheckCircle2 className="w-4 h-4 stroke-[3]" />
             <span>{toastMessage}</span>
           </div>
+        </div>
+      )}
+
+      {/* Demo Banner */}
+      {auth.mode === 'demo' && (
+        <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-1.5 flex items-center justify-between text-[11px] text-amber-300">
+          <span className="font-semibold">Demo Sandbox Mode (Isolated)</span>
+          <button
+            onClick={handleResetPin}
+            className="underline hover:text-amber-200 font-bold ml-2"
+          >
+            Exit Demo
+          </button>
         </div>
       )}
 
@@ -149,7 +232,7 @@ export default function App() {
                       </div>
                       <h1 className="text-2xl font-black text-white tracking-tight">IronLog Tracker</h1>
                       <p className="text-xs text-slate-400 max-w-xs mx-auto">
-                        Fast, mobile-first workout tracking.
+                        Logged in as <span className="font-bold text-slate-200">{auth.userName}</span>
                       </p>
                     </div>
 
@@ -273,6 +356,8 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         isWorkoutActive={!!activeWorkout}
+        userName={auth?.userName}
+        onSwitchProfile={handleSwitchProfile}
       />
     </div>
   );
