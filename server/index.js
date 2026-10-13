@@ -848,21 +848,20 @@ async function getFullWorkoutDetails(workoutId) {
   };
 }
 
-// Serve production frontend assets if built
-const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
-app.get('*', (req, res) => {
-  const indexPath = path.join(clientDist, 'index.html');
-  if (require('node:fs').existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.json({ message: 'IronLog API is active.' });
-  }
-});
+// Only serve static frontend files in local dev mode.
+// On Vercel, the CDN edge serves client/dist — the serverless function handles /api/* only.
+if (!process.env.VERCEL) {
+  const clientDist = path.join(__dirname, '..', 'client', 'dist');
+  app.use(express.static(clientDist));
+  app.get('*', (req, res) => {
+    const indexPath = path.join(clientDist, 'index.html');
+    if (require('node:fs').existsSync(indexPath)) {
+      res.sendFile(indexPath);
+    } else {
+      res.json({ message: 'IronLog API is active.' });
+    }
+  });
 
-// Only listen on port if run directly (e.g. node server/index.js),
-// In Vercel serverless functions, the app is exported as a module handler.
-if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Workout Tracker server listening on port ${PORT}`);
   });
