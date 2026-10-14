@@ -612,7 +612,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
               </div>
               <div>
                 <h3 className="text-lg font-bold text-white">Finish Workout?</h3>
-                <p className="text-xs text-slate-400">Duration: {formatDuration(elapsedSeconds)}</p>
+                <p className="text-xs text-slate-400 flex items-center gap-1">Duration: <WorkoutDuration startedAt={workout.started_at} /></p>
               </div>
             </div>
 
