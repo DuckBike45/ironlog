@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Dumbbell, X, Sparkles, Check, ChevronRight } from 'lucide-react';
+import { Search, Plus, Dumbbell, X, Sparkles, Check, ChevronRight, Edit2 } from 'lucide-react';
 import { api } from '../api';
 import ExerciseHistoryModal from './ExerciseHistoryModal';
 
@@ -19,6 +19,14 @@ export default function ExerciseLibrary() {
   const [newNotes, setNewNotes] = useState('');
   const [error, setError] = useState('');
 
+  // Edit exercise form
+  const [editingExercise, setEditingExercise] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('Chest');
+  const [editNotes, setEditNotes] = useState('');
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   useEffect(() => {
     loadExercises();
   }, []);
@@ -37,6 +45,35 @@ export default function ExerciseLibrary() {
 
   const handleSelectExercise = (exercise) => {
     setSelectedExerciseForHistory(exercise);
+  };
+
+  const handleStartEdit = (exercise) => {
+    setEditingExercise(exercise);
+    setEditName(exercise.name);
+    setEditCategory(exercise.category);
+    setEditNotes(exercise.notes || '');
+    setEditError('');
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editName.trim()) return;
+
+    try {
+      setSavingEdit(true);
+      setEditError('');
+      await api.updateExercise(editingExercise.id, {
+        name: editName.trim(),
+        category: editCategory,
+        notes: editNotes.trim(),
+      });
+      setEditingExercise(null);
+      await loadExercises();
+    } catch (err) {
+      setEditError(err.message || 'Failed to update exercise');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const handleCreateExercise = async (e) => {
@@ -133,10 +170,10 @@ export default function ExerciseLibrary() {
       ) : (
         <div className="space-y-2">
           {filtered.map((ex) => (
-            <button
+            <div
               key={ex.id}
               onClick={() => handleSelectExercise(ex)}
-              className="w-full text-left bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-3.5 flex items-center justify-between active:scale-[0.99] transition-all group"
+              className="w-full text-left bg-slate-900/90 border border-slate-800/80 hover:border-slate-700 rounded-2xl p-3.5 flex items-center justify-between active:scale-[0.99] transition-all group cursor-pointer"
             >
               <div>
                 <div className="font-bold text-white text-sm group-hover:text-blue-400 transition-colors flex items-center gap-2">
@@ -156,8 +193,21 @@ export default function ExerciseLibrary() {
                   )}
                 </div>
               </div>
-              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
-            </button>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStartEdit(ex);
+                  }}
+                  className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-800/80 rounded-xl transition-colors"
+                  title="Edit exercise"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-white transition-colors" />
+              </div>
+            </div>
           ))}
         </div>
       )}
@@ -170,6 +220,89 @@ export default function ExerciseLibrary() {
         exerciseName={selectedExerciseForHistory?.name}
         exerciseCategory={selectedExerciseForHistory?.category}
       />
+
+      {/* Edit Exercise Modal */}
+      {editingExercise && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 animate-in fade-in duration-150">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-sm p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-blue-400" />
+                <h3 className="text-lg font-black text-white">Edit Exercise</h3>
+              </div>
+              <button
+                onClick={() => setEditingExercise(null)}
+                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center active:bg-slate-700"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {editError && (
+              <div className="p-2.5 bg-red-500/20 border border-red-500/40 text-red-300 text-xs rounded-xl">
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Exercise Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="e.g. Bulgarian Split Squat"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Muscle Category</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                >
+                  {CATEGORIES.filter((c) => c !== 'All' && !c.includes('⭐')).map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 block mb-1">Notes / Cues (optional)</label>
+                <input
+                  type="text"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  placeholder="e.g. Pin 4, bench angle 30°"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingExercise(null)}
+                  className="flex-1 py-2.5 bg-slate-800 text-slate-300 text-xs font-bold rounded-xl active:bg-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit || !editName.trim()}
+                  className="flex-1 py-2.5 bg-blue-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
+                >
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add Custom Exercise Modal */}
       {showAddModal && (
@@ -211,7 +344,7 @@ export default function ExerciseLibrary() {
                   onChange={(e) => setNewCategory(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-sm text-white focus:outline-none"
                 >
-                  {CATEGORIES.filter((c) => c !== 'All').map((c) => (
+                  {CATEGORIES.filter((c) => c !== 'All' && !c.includes('⭐')).map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>

@@ -66,6 +66,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  updateExercise: (id, data) =>
+    request(`/exercises/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
   getLastPerformance: (exerciseId, excludeWorkoutId) => {
     const params = new URLSearchParams();
     if (excludeWorkoutId) params.append('excludeWorkoutId', excludeWorkoutId);

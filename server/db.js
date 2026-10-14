@@ -252,9 +252,23 @@ async function initDb() {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           template_id INTEGER NOT NULL REFERENCES templates(id) ON DELETE CASCADE,
           exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
-          order_index INTEGER NOT NULL DEFAULT 0
+          order_index INTEGER NOT NULL DEFAULT 0,
+          target_sets INTEGER,
+          target_reps INTEGER,
+          target_weight REAL
         );
       `);
+
+      // Safely ensure target columns exist for existing tables
+      try {
+        await db.execute('ALTER TABLE template_exercises ADD COLUMN target_sets INTEGER');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE template_exercises ADD COLUMN target_reps INTEGER');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE template_exercises ADD COLUMN target_weight REAL');
+      } catch (_) {}
 
       // Indexes
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_workouts_user ON workouts(user_id);`);

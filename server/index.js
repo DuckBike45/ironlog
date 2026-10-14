@@ -385,6 +385,58 @@ app.post('/api/exercises', async (req, res) => {
   }
 });
 
+// Update an exercise (e.g. change category, rename, notes)
+app.put('/api/exercises/:id', async (req, res) => {
+  try {
+    const exerciseId = parseInt(req.params.id, 10);
+    const { name, category, notes } = req.body;
+
+    const exCheck = await db.execute({
+      sql: 'SELECT * FROM exercises WHERE id = ?',
+      args: [exerciseId],
+    });
+
+    if (exCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Exercise not found' });
+    }
+
+    if (name !== undefined && name.trim() === '') {
+      return res.status(400).json({ error: 'Exercise name cannot be empty' });
+    }
+
+    // If renaming, ensure name uniqueness
+    if (name && name.trim().toLowerCase() !== exCheck.rows[0].name.toLowerCase()) {
+      const nameCheck = await db.execute({
+        sql: 'SELECT id FROM exercises WHERE LOWER(name) = LOWER(?) AND id != ?',
+        args: [name.trim(), exerciseId],
+      });
+      if (nameCheck.rows.length > 0) {
+        return res.status(400).json({ error: 'An exercise with this name already exists' });
+      }
+    }
+
+    const current = exCheck.rows[0];
+    const updatedName = name !== undefined ? name.trim() : current.name;
+    const updatedCategory = category !== undefined ? category.trim() : current.category;
+    const updatedNotes = notes !== undefined ? notes.trim() : current.notes;
+
+    await db.execute({
+      sql: 'UPDATE exercises SET name = ?, category = ?, notes = ? WHERE id = ?',
+      args: [updatedName, updatedCategory, updatedNotes, exerciseId],
+    });
+
+    const updated = await db.execute({
+      sql: 'SELECT * FROM exercises WHERE id = ?',
+      args: [exerciseId],
+    });
+
+    res.json(updated.rows[0]);
+  } catch (err) {
+    console.error('Error updating exercise:', err);
+    res.status(500).json({ error: 'Failed to update exercise' });
+  }
+});
+
 // Get previous performance for an exercise
 app.get('/api/exercises/:id/last-performance', async (req, res) => {
   try {
@@ -919,6 +971,9 @@ app.get('/api/templates', async (req, res) => {
             te.id,
             te.exercise_id,
             te.order_index,
+            te.target_sets,
+            te.target_reps,
+            te.target_weight,
             e.name AS exercise_name,
             e.category AS exercise_category
           FROM template_exercises te
@@ -957,6 +1012,9 @@ app.get('/api/templates/:id', async (req, res) => {
           te.id,
           te.exercise_id,
           te.order_index,
+          te.target_sets,
+          te.target_reps,
+          te.target_weight,
           e.name AS exercise_name,
           e.category AS exercise_category
         FROM template_exercises te
@@ -980,7 +1038,7 @@ app.get('/api/templates/:id', async (req, res) => {
 // Create a new template
 app.post('/api/templates', async (req, res) => {
   try {
-    const { name, notes = '', exercise_ids = [] } = req.body;
+    const { name, notes = '', exercise_ids = [], exercises = [] } = req.body;
     const userId = req.userId;
     if (!name || name.trim() === '') {
       return res.status(400).json({ error: 'Template name is required' });
@@ -992,11 +1050,24 @@ app.post('/api/templates', async (req, res) => {
     });
     const templateId = Number(result.lastInsertRowid);
 
-    if (Array.isArray(exercise_ids) && exercise_ids.length > 0) {
-      for (let idx = 0; idx < exercise_ids.length; idx++) {
+    const items = exercises.length > 0 ? exercises : exercise_ids;
+    if (Array.isArray(items) && items.length > 0) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const exerciseId = typeof item === 'object' && item !== null ? (item.exercise_id || item.id) : parseInt(item, 10);
+        const targetSets = (typeof item === 'object' && item !== null && item.target_sets !== undefined && item.target_sets !== null && item.target_sets !== '')
+          ? parseInt(item.target_sets, 10)
+          : null;
+        const targetReps = (typeof item === 'object' && item !== null && item.target_reps !== undefined && item.target_reps !== null && item.target_reps !== '')
+          ? parseInt(item.target_reps, 10)
+          : null;
+        const targetWeight = (typeof item === 'object' && item !== null && item.target_weight !== undefined && item.target_weight !== null && item.target_weight !== '')
+          ? parseFloat(item.target_weight)
+          : null;
+
         await db.execute({
-          sql: 'INSERT INTO template_exercises (template_id, exercise_id, order_index) VALUES (?, ?, ?)',
-          args: [templateId, parseInt(exercise_ids[idx], 10), idx],
+          sql: 'INSERT INTO template_exercises (template_id, exercise_id, order_index, target_sets, target_reps, target_weight) VALUES (?, ?, ?, ?, ?, ?)',
+          args: [templateId, parseInt(exerciseId, 10), idx, targetSets, targetReps, targetWeight],
         });
       }
     }
@@ -1008,12 +1079,15 @@ app.post('/api/templates', async (req, res) => {
           te.id,
           te.exercise_id,
           te.order_index,
+          te.target_sets,
+          te.target_reps,
+          te.target_weight,
           e.name AS exercise_name,
           e.category AS exercise_category
         FROM template_exercises te
         JOIN exercises e ON te.exercise_id = e.id
         WHERE te.template_id = ?
-        ORDER BY te.order_index ASC
+        ORDER BY te.order_index ASC, te.id ASC
       `,
       args: [templateId],
     });
@@ -1029,7 +1103,7 @@ app.post('/api/templates', async (req, res) => {
 app.put('/api/templates/:id', async (req, res) => {
   try {
     const templateId = parseInt(req.params.id, 10);
-    const { name, notes, exercise_ids } = req.body;
+    const { name, notes, exercise_ids, exercises } = req.body;
 
     const tplRes = await db.execute({ sql: 'SELECT id FROM templates WHERE id = ?', args: [templateId] });
     if (tplRes.rows.length === 0) {
@@ -1043,12 +1117,25 @@ app.put('/api/templates/:id', async (req, res) => {
       await db.execute({ sql: 'UPDATE templates SET notes = ? WHERE id = ?', args: [notes.trim(), templateId] });
     }
 
-    if (Array.isArray(exercise_ids)) {
+    const items = exercises !== undefined ? exercises : exercise_ids;
+    if (Array.isArray(items)) {
       await db.execute({ sql: 'DELETE FROM template_exercises WHERE template_id = ?', args: [templateId] });
-      for (let idx = 0; idx < exercise_ids.length; idx++) {
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const exerciseId = typeof item === 'object' && item !== null ? (item.exercise_id || item.id) : parseInt(item, 10);
+        const targetSets = (typeof item === 'object' && item !== null && item.target_sets !== undefined && item.target_sets !== null && item.target_sets !== '')
+          ? parseInt(item.target_sets, 10)
+          : null;
+        const targetReps = (typeof item === 'object' && item !== null && item.target_reps !== undefined && item.target_reps !== null && item.target_reps !== '')
+          ? parseInt(item.target_reps, 10)
+          : null;
+        const targetWeight = (typeof item === 'object' && item !== null && item.target_weight !== undefined && item.target_weight !== null && item.target_weight !== '')
+          ? parseFloat(item.target_weight)
+          : null;
+
         await db.execute({
-          sql: 'INSERT INTO template_exercises (template_id, exercise_id, order_index) VALUES (?, ?, ?)',
-          args: [templateId, parseInt(exercise_ids[idx], 10), idx],
+          sql: 'INSERT INTO template_exercises (template_id, exercise_id, order_index, target_sets, target_reps, target_weight) VALUES (?, ?, ?, ?, ?, ?)',
+          args: [templateId, parseInt(exerciseId, 10), idx, targetSets, targetReps, targetWeight],
         });
       }
     }
@@ -1060,12 +1147,15 @@ app.put('/api/templates/:id', async (req, res) => {
           te.id,
           te.exercise_id,
           te.order_index,
+          te.target_sets,
+          te.target_reps,
+          te.target_weight,
           e.name AS exercise_name,
           e.category AS exercise_category
         FROM template_exercises te
         JOIN exercises e ON te.exercise_id = e.id
         WHERE te.template_id = ?
-        ORDER BY te.order_index ASC
+        ORDER BY te.order_index ASC, te.id ASC
       `,
       args: [templateId],
     });
@@ -1126,15 +1216,29 @@ app.post('/api/templates/:id/start', async (req, res) => {
     const workoutId = Number(workoutRes.lastInsertRowid);
 
     const teRes = await db.execute({
-      sql: 'SELECT exercise_id, order_index FROM template_exercises WHERE template_id = ? ORDER BY order_index ASC',
+      sql: 'SELECT exercise_id, order_index, target_sets, target_reps, target_weight FROM template_exercises WHERE template_id = ? ORDER BY order_index ASC',
       args: [templateId],
     });
 
     for (const te of teRes.rows) {
-      await db.execute({
+      const weResult = await db.execute({
         sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index) VALUES (?, ?, ?)',
         args: [workoutId, te.exercise_id, te.order_index],
       });
+      const workoutExerciseId = Number(weResult.lastInsertRowid);
+
+      // If template defines target_sets > 0, generate initial planned sets
+      const targetSetsCount = parseInt(te.target_sets, 10) || 0;
+      if (targetSetsCount > 0) {
+        const defaultReps = te.target_reps != null ? parseInt(te.target_reps, 10) : 0;
+        const defaultWeight = te.target_weight != null ? parseFloat(te.target_weight) : 0;
+        for (let setIdx = 1; setIdx <= targetSetsCount; setIdx++) {
+          await db.execute({
+            sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup) VALUES (?, ?, ?, ?, ?)',
+            args: [workoutExerciseId, setIdx, defaultWeight, defaultReps, 0],
+          });
+        }
+      }
     }
 
     const fullWorkout = await getFullWorkoutDetails(workoutId);

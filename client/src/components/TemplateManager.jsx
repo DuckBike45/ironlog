@@ -60,6 +60,9 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
         id: e.exercise_id,
         name: e.exercise_name,
         category: e.exercise_category,
+        target_sets: e.target_sets != null ? e.target_sets : '',
+        target_reps: e.target_reps != null ? e.target_reps : '',
+        target_weight: e.target_weight != null ? e.target_weight : '',
       }))
     );
     setError('');
@@ -68,8 +71,29 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
   const handleAddExerciseToTemplate = (exercise) => {
     setShowExercisePicker(false);
     if (!selectedExercises.some((e) => e.id === exercise.id)) {
-      setSelectedExercises((prev) => [...prev, exercise]);
+      setSelectedExercises((prev) => [
+        ...prev,
+        {
+          id: exercise.id,
+          name: exercise.name,
+          category: exercise.category,
+          target_sets: '',
+          target_reps: '',
+          target_weight: '',
+        },
+      ]);
     }
+  };
+
+  const handleUpdateTarget = (index, field, value) => {
+    setSelectedExercises((prev) => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        [field]: value,
+      };
+      return next;
+    });
   };
 
   const handleRemoveExerciseFromTemplate = (exerciseId) => {
@@ -99,6 +123,12 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
         name: name.trim(),
         notes: notes.trim(),
         exercise_ids: selectedExercises.map((e) => e.id),
+        exercises: selectedExercises.map((e) => ({
+          exercise_id: e.id,
+          target_sets: e.target_sets !== '' && e.target_sets != null ? parseInt(e.target_sets, 10) : null,
+          target_reps: e.target_reps !== '' && e.target_reps != null ? parseInt(e.target_reps, 10) : null,
+          target_weight: e.target_weight !== '' && e.target_weight != null ? parseFloat(e.target_weight) : null,
+        })),
       };
 
       if (editingTemplate) {
@@ -207,49 +237,97 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                     No exercises added yet. Tap "Add Exercise" to pick movements.
                   </div>
                 ) : (
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {selectedExercises.map((ex, idx) => (
                       <div
                         key={ex.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800"
+                        className="p-3 rounded-2xl bg-slate-950 border border-slate-800 space-y-2.5"
                       >
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center font-mono">
-                            {idx + 1}
-                          </span>
-                          <div>
-                            <div className="text-xs font-bold text-white">{ex.name}</div>
-                            <div className="text-[10px] text-slate-400">{ex.category}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center font-mono">
+                              {idx + 1}
+                            </span>
+                            <div>
+                              <div className="text-xs font-bold text-white">{ex.name}</div>
+                              <div className="text-[10px] text-slate-400">{ex.category}</div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveExercise(idx, -1)}
+                              disabled={idx === 0}
+                              className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
+                              title="Move up"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveExercise(idx, 1)}
+                              disabled={idx === selectedExercises.length - 1}
+                              className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
+                              title="Move down"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveExerciseFromTemplate(ex.id)}
+                              className="p-1 text-slate-500 hover:text-red-400 ml-1"
+                              title="Remove"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleMoveExercise(idx, -1)}
-                            disabled={idx === 0}
-                            className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
-                            title="Move up"
-                          >
-                            <ChevronUp className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleMoveExercise(idx, 1)}
-                            disabled={idx === selectedExercises.length - 1}
-                            className="p-1 text-slate-400 hover:text-white disabled:opacity-30"
-                            title="Move down"
-                          >
-                            <ChevronDown className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveExerciseFromTemplate(ex.id)}
-                            className="p-1 text-slate-500 hover:text-red-400 ml-1"
-                            title="Remove"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
+                        {/* Optional Target Inputs */}
+                        <div className="pt-2 border-t border-slate-800/60 grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                              Sets (opt)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="50"
+                              placeholder="e.g. 4"
+                              value={ex.target_sets ?? ''}
+                              onChange={(e) => handleUpdateTarget(idx, 'target_sets', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                              Reps (opt)
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="999"
+                              placeholder="e.g. 8"
+                              value={ex.target_reps ?? ''}
+                              onChange={(e) => handleUpdateTarget(idx, 'target_reps', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
+                              Weight kg (opt)
+                            </label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              placeholder="e.g. 70"
+                              value={ex.target_weight ?? ''}
+                              onChange={(e) => handleUpdateTarget(idx, 'target_weight', e.target.value)}
+                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -339,15 +417,24 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
 
                       {/* Exercises badges */}
                       {tpl.exercises && tpl.exercises.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {tpl.exercises.map((e, idx) => (
-                            <span
-                              key={e.id || idx}
-                              className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded text-[10px] text-slate-300 font-medium"
-                            >
-                              {e.exercise_name}
-                            </span>
-                          ))}
+                        <div className="flex flex-wrap gap-1.5">
+                          {tpl.exercises.map((e, idx) => {
+                            const hasTargets = e.target_sets || e.target_reps || (e.target_weight != null && e.target_weight !== '');
+                            return (
+                              <span
+                                key={e.id || idx}
+                                className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-lg text-[10px] text-slate-300 font-medium inline-flex items-center gap-1"
+                              >
+                                <span>{e.exercise_name}</span>
+                                {hasTargets && (
+                                  <span className="text-blue-400 font-mono text-[9px]">
+                                    ({e.target_sets ? `${e.target_sets}×` : ''}{e.target_reps ? `${e.target_reps}` : ''}
+                                    {e.target_weight != null && e.target_weight !== '' ? ` @ ${e.target_weight}kg` : ''})
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          })}
                         </div>
                       )}
 
