@@ -24,6 +24,17 @@ export default function RestTimer() {
     return () => clearInterval(interval);
   }, [isRunning, timeLeft]);
 
+  // Listen to external set completion event
+  useEffect(() => {
+    const handleStartRest = () => {
+      setTimeLeft(DEFAULT_SECONDS);
+      setIsFinished(false);
+      setIsRunning(true);
+    };
+    window.addEventListener('ironlog:start-rest', handleStartRest);
+    return () => window.removeEventListener('ironlog:start-rest', handleStartRest);
+  }, []);
+
   const startTimer = () => {
     setTimeLeft(DEFAULT_SECONDS);
     setIsFinished(false);
@@ -54,17 +65,17 @@ export default function RestTimer() {
   // Progress percentage for subtle visual progress bar
   const progressPercent = Math.min(100, Math.max(0, ((DEFAULT_SECONDS - timeLeft) / DEFAULT_SECONDS) * 100));
 
-  // Visual alert banner when timer finishes (silent alert)
+  // Visual alert banner when timer finishes
   if (isFinished) {
     return (
       <div className="bg-amber-500 border-b border-amber-400 text-slate-950 px-4 py-2 flex items-center justify-between shadow-lg animate-pulse">
         <div className="flex items-center gap-2">
           <BellRing className="w-4 h-4 text-slate-950 animate-bounce" />
-          <span className="text-xs font-black uppercase tracking-wider">Rest Complete! (2:00)</span>
+          <span className="text-xs font-semibold">Rest Complete! (2:00)</span>
         </div>
         <button
           onClick={dismissAlert}
-          className="px-2.5 py-1 bg-slate-950 text-amber-300 text-[11px] font-bold rounded-lg active:scale-95 transition-transform"
+          className="px-2.5 py-1 bg-slate-950 text-amber-300 text-xs font-medium rounded-lg active:scale-95 transition-transform"
         >
           Dismiss
         </button>
@@ -73,11 +84,11 @@ export default function RestTimer() {
   }
 
   return (
-    <div className="relative bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 px-4 py-2 flex items-center justify-between shadow-sm">
+    <div className="relative bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-between shadow-sm transition-colors">
       {/* Background progress fill */}
       {isRunning && (
         <div
-          className="absolute left-0 bottom-0 top-0 bg-blue-600/10 transition-all pointer-events-none"
+          className="absolute left-0 bottom-0 top-0 bg-blue-600/10 dark:bg-blue-500/10 transition-all pointer-events-none"
           style={{ width: `${progressPercent}%` }}
         />
       )}
@@ -85,19 +96,19 @@ export default function RestTimer() {
       {/* Left: Clock Icon + Time Display */}
       <div className="relative flex items-center gap-2.5">
         <div
-          className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-bold text-xs transition-all ${
+          className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-medium text-xs transition-all ${
             isRunning
               ? 'bg-blue-600 text-white ring-2 ring-blue-500/40 animate-pulse'
-              : 'bg-slate-800 text-slate-400'
+              : 'bg-slate-150 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />
         </div>
         <div>
-          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mr-1.5">
+          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-1.5">
             Rest
           </span>
-          <span className="font-mono text-base font-black text-white">
+          <span className="font-mono text-base font-semibold text-slate-900 dark:text-white">
             {formatTime(timeLeft)}
           </span>
         </div>
@@ -108,7 +119,7 @@ export default function RestTimer() {
         {isRunning ? (
           <button
             onClick={togglePause}
-            className="px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold flex items-center gap-1 active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
           >
             <Pause className="w-3 h-3 fill-current" />
             <span>Pause</span>
@@ -116,7 +127,7 @@ export default function RestTimer() {
         ) : timeLeft < DEFAULT_SECONDS && timeLeft > 0 ? (
           <button
             onClick={togglePause}
-            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold flex items-center gap-1 shadow-md shadow-blue-600/30 active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium flex items-center gap-1 shadow-sm active:scale-95 transition-all"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>Resume</span>
@@ -124,7 +135,7 @@ export default function RestTimer() {
         ) : (
           <button
             onClick={startTimer}
-            className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/30 active:scale-95 transition-all"
+            className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>Start 2:00</span>
@@ -134,7 +145,7 @@ export default function RestTimer() {
         {timeLeft !== DEFAULT_SECONDS && (
           <button
             onClick={resetTimer}
-            className="w-7 h-7 rounded-lg bg-slate-800 text-slate-400 hover:text-slate-200 flex items-center justify-center active:scale-95 transition-all"
+            className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 flex items-center justify-center active:scale-95 transition-all"
             title="Reset"
           >
             <RotateCcw className="w-3 h-3" />

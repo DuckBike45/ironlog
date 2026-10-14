@@ -162,6 +162,11 @@ export const api = {
       body: JSON.stringify(setData),
     }),
 
+  toggleSetComplete: (setId) =>
+    request(`/sets/${setId}/toggle-complete`, {
+      method: 'POST',
+    }),
+
   deleteSet: (setId) =>
     request(`/sets/${setId}`, {
       method: 'DELETE',

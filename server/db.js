@@ -255,7 +255,8 @@ async function initDb() {
           order_index INTEGER NOT NULL DEFAULT 0,
           target_sets INTEGER,
           target_reps INTEGER,
-          target_weight REAL
+          target_weight REAL,
+          sets_json TEXT
         );
       `);
 
@@ -268,6 +269,9 @@ async function initDb() {
       } catch (_) {}
       try {
         await db.execute('ALTER TABLE template_exercises ADD COLUMN target_weight REAL');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE template_exercises ADD COLUMN sets_json TEXT');
       } catch (_) {}
 
       // Indexes

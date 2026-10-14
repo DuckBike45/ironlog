@@ -56,14 +56,31 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
     setName(template.name);
     setNotes(template.notes || '');
     setSelectedExercises(
-      (template.exercises || []).map((e) => ({
-        id: e.exercise_id,
-        name: e.exercise_name,
-        category: e.exercise_category,
-        target_sets: e.target_sets != null ? e.target_sets : '',
-        target_reps: e.target_reps != null ? e.target_reps : '',
-        target_weight: e.target_weight != null ? e.target_weight : '',
-      }))
+      (template.exercises || []).map((e) => {
+        let sets = [];
+        if (e.sets_json) {
+          try {
+            sets = typeof e.sets_json === 'string' ? JSON.parse(e.sets_json) : e.sets_json;
+          } catch (_) {}
+        }
+        if (!Array.isArray(sets) || sets.length === 0) {
+          const count = parseInt(e.target_sets, 10) || 0;
+          if (count > 0) {
+            sets = Array.from({ length: count }, (_, i) => ({
+              set_number: i + 1,
+              weight: e.target_weight != null ? e.target_weight : '',
+              reps: e.target_reps != null ? e.target_reps : '',
+              is_warmup: false,
+            }));
+          }
+        }
+        return {
+          id: e.exercise_id,
+          name: e.exercise_name,
+          category: e.exercise_category,
+          sets: sets || [],
+        };
+      })
     );
     setError('');
   };
@@ -77,21 +94,56 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
           id: exercise.id,
           name: exercise.name,
           category: exercise.category,
-          target_sets: '',
-          target_reps: '',
-          target_weight: '',
+          sets: [
+            { set_number: 1, weight: '', reps: '', is_warmup: false },
+          ],
         },
       ]);
     }
   };
 
-  const handleUpdateTarget = (index, field, value) => {
+  const handleAddSetToExercise = (exerciseIdx) => {
     setSelectedExercises((prev) => {
       const next = [...prev];
-      next[index] = {
-        ...next[index],
+      const ex = next[exerciseIdx];
+      const existingSets = ex.sets || [];
+      const lastSet = existingSets[existingSets.length - 1];
+      const newSet = {
+        set_number: existingSets.length + 1,
+        weight: lastSet ? lastSet.weight : '',
+        reps: lastSet ? lastSet.reps : '',
+        is_warmup: false,
+      };
+      next[exerciseIdx] = {
+        ...ex,
+        sets: [...existingSets, newSet],
+      };
+      return next;
+    });
+  };
+
+  const handleUpdateSet = (exerciseIdx, setIdx, field, value) => {
+    setSelectedExercises((prev) => {
+      const next = [...prev];
+      const ex = next[exerciseIdx];
+      const updatedSets = [...(ex.sets || [])];
+      updatedSets[setIdx] = {
+        ...updatedSets[setIdx],
         [field]: value,
       };
+      next[exerciseIdx] = { ...ex, sets: updatedSets };
+      return next;
+    });
+  };
+
+  const handleRemoveSet = (exerciseIdx, setIdx) => {
+    setSelectedExercises((prev) => {
+      const next = [...prev];
+      const ex = next[exerciseIdx];
+      const updatedSets = (ex.sets || [])
+        .filter((_, i) => i !== setIdx)
+        .map((s, i) => ({ ...s, set_number: i + 1 }));
+      next[exerciseIdx] = { ...ex, sets: updatedSets };
       return next;
     });
   };
@@ -125,9 +177,12 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
         exercise_ids: selectedExercises.map((e) => e.id),
         exercises: selectedExercises.map((e) => ({
           exercise_id: e.id,
-          target_sets: e.target_sets !== '' && e.target_sets != null ? parseInt(e.target_sets, 10) : null,
-          target_reps: e.target_reps !== '' && e.target_reps != null ? parseInt(e.target_reps, 10) : null,
-          target_weight: e.target_weight !== '' && e.target_weight != null ? parseFloat(e.target_weight) : null,
+          sets: (e.sets || []).map((s, i) => ({
+            set_number: i + 1,
+            weight: s.weight !== '' && s.weight != null ? parseFloat(s.weight) : null,
+            reps: s.reps !== '' && s.reps != null ? parseInt(s.reps, 10) : null,
+            is_warmup: !!s.is_warmup,
+          })),
         })),
       };
 
@@ -284,50 +339,95 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                           </div>
                         </div>
 
-                        {/* Optional Target Inputs */}
-                        <div className="pt-2 border-t border-slate-800/60 grid grid-cols-3 gap-2">
-                          <div>
-                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                              Sets (opt)
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="50"
-                              placeholder="e.g. 4"
-                              value={ex.target_sets ?? ''}
-                              onChange={(e) => handleUpdateTarget(idx, 'target_sets', e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
-                            />
+                        {/* Per-Set Baseline Builder */}
+                        <div className="pt-2 border-t border-slate-800/60 space-y-2">
+                          <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                            <span>Target Sets ({ex.sets?.length || 0})</span>
+                            <button
+                              type="button"
+                              onClick={() => handleAddSetToExercise(idx)}
+                              className="text-blue-400 hover:text-blue-300 font-semibold text-xs inline-flex items-center gap-1 active:scale-95"
+                            >
+                              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                              Add Set
+                            </button>
                           </div>
-                          <div>
-                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                              Reps (opt)
-                            </label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="999"
-                              placeholder="e.g. 8"
-                              value={ex.target_reps ?? ''}
-                              onChange={(e) => handleUpdateTarget(idx, 'target_reps', e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
-                              Weight kg (opt)
-                            </label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              placeholder="e.g. 70"
-                              value={ex.target_weight ?? ''}
-                              onChange={(e) => handleUpdateTarget(idx, 'target_weight', e.target.value)}
-                              className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
-                            />
-                          </div>
+
+                          {(!ex.sets || ex.sets.length === 0) ? (
+                            <div className="text-xs text-slate-500 italic py-1">
+                              No baseline sets configured. (Sets can be logged freely during workout)
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="grid grid-cols-12 text-[10px] font-medium text-slate-400 px-1">
+                                <div className="col-span-2">Set</div>
+                                <div className="col-span-2 text-center">Warmup</div>
+                                <div className="col-span-4 text-center">Weight (kg)</div>
+                                <div className="col-span-3 text-center">Reps</div>
+                                <div className="col-span-1"></div>
+                              </div>
+                              {ex.sets.map((s, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  className={`grid grid-cols-12 items-center gap-1 border rounded-xl p-1.5 transition-colors ${
+                                    s.is_warmup
+                                      ? 'bg-amber-500/10 border-amber-500/30'
+                                      : 'bg-slate-900/80 border-slate-800'
+                                  }`}
+                                >
+                                  <div className="col-span-2 font-mono text-xs text-slate-400 pl-1 font-semibold flex items-center gap-1">
+                                    <span>#{sIdx + 1}</span>
+                                    {s.is_warmup && (
+                                      <span className="text-[9px] px-1 bg-amber-500/20 text-amber-300 rounded font-semibold">
+                                        W
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="col-span-2 flex justify-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={!!s.is_warmup}
+                                      onChange={(e) => handleUpdateSet(idx, sIdx, 'is_warmup', e.target.checked)}
+                                      className="w-3.5 h-3.5 rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0"
+                                      title="Warmup set"
+                                    />
+                                  </div>
+                                  <div className="col-span-4">
+                                    <input
+                                      type="number"
+                                      step="any"
+                                      min="0"
+                                      placeholder="0"
+                                      value={s.weight ?? ''}
+                                      onChange={(e) => handleUpdateSet(idx, sIdx, 'weight', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white text-center font-mono focus:outline-none focus:border-blue-500"
+                                    />
+                                  </div>
+                                  <div className="col-span-3">
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max="999"
+                                      placeholder="0"
+                                      value={s.reps ?? ''}
+                                      onChange={(e) => handleUpdateSet(idx, sIdx, 'reps', e.target.value)}
+                                      className="w-full bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-white text-center font-mono focus:outline-none focus:border-blue-500"
+                                    />
+                                  </div>
+                                  <div className="col-span-1 flex justify-center">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveSet(idx, sIdx)}
+                                      className="text-slate-500 hover:text-red-400 p-1"
+                                      title="Remove set"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -419,19 +519,30 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                       {tpl.exercises && tpl.exercises.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {tpl.exercises.map((e, idx) => {
-                            const hasTargets = e.target_sets || e.target_reps || (e.target_weight != null && e.target_weight !== '');
+                            let sets = [];
+                            if (e.sets_json) {
+                              try {
+                                sets = typeof e.sets_json === 'string' ? JSON.parse(e.sets_json) : e.sets_json;
+                              } catch (_) {}
+                            }
+                            const hasSets = Array.isArray(sets) && sets.length > 0;
+                            const hasLegacy = e.target_sets || e.target_reps || (e.target_weight != null && e.target_weight !== '');
                             return (
                               <span
                                 key={e.id || idx}
                                 className="px-2 py-0.5 bg-slate-900 border border-slate-800 rounded-lg text-[10px] text-slate-300 font-medium inline-flex items-center gap-1"
                               >
                                 <span>{e.exercise_name}</span>
-                                {hasTargets && (
+                                {hasSets ? (
+                                  <span className="text-blue-400 font-mono text-[9px]">
+                                    ({sets.length} {sets.length === 1 ? 'set' : 'sets'})
+                                  </span>
+                                ) : hasLegacy ? (
                                   <span className="text-blue-400 font-mono text-[9px]">
                                     ({e.target_sets ? `${e.target_sets}×` : ''}{e.target_reps ? `${e.target_reps}` : ''}
                                     {e.target_weight != null && e.target_weight !== '' ? ` @ ${e.target_weight}kg` : ''})
                                   </span>
-                                )}
+                                ) : null}
                               </span>
                             );
                           })}

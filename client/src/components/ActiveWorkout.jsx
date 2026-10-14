@@ -232,6 +232,93 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
+  const handleToggleSetComplete = async (set) => {
+    const isNowComplete = !set.completed_at;
+    const previousWorkout = workout;
+
+    // Optimistic toggle
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === set.id) {
+            return {
+              ...s,
+              completed_at: isNowComplete ? new Date().toISOString() : null,
+            };
+          }
+          return s;
+        }),
+      })),
+    };
+
+    onWorkoutUpdated(optimisticWorkout);
+
+    // If marked complete, trigger rest timer
+    if (isNowComplete) {
+      window.dispatchEvent(new CustomEvent('ironlog:start-rest'));
+    }
+
+    try {
+      const response = await api.toggleSetComplete(set.id);
+      onWorkoutUpdated(response.workout);
+    } catch (err) {
+      onWorkoutUpdated(previousWorkout);
+      alert(err.message || 'Failed to toggle set completion');
+    }
+  };
+
+  const handleQuickUpdateSet = async (set, field, value) => {
+    const updatedWeight = field === 'weight' ? (value === '' ? 0 : parseFloat(value)) : set.weight;
+    const updatedReps = field === 'reps' ? (value === '' ? 0 : parseInt(value, 10)) : set.reps;
+
+    // Optimistic update
+    const previousWorkout = workout;
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === set.id) {
+            return {
+              ...s,
+              [field]: value,
+            };
+          }
+          return s;
+        }),
+      })),
+    };
+    onWorkoutUpdated(optimisticWorkout);
+
+    try {
+      const response = await api.updateSet(set.id, {
+        weight: isNaN(updatedWeight) ? 0 : updatedWeight,
+        reps: isNaN(updatedReps) ? 0 : updatedReps,
+        is_warmup: set.is_warmup,
+      });
+      onWorkoutUpdated(response.workout);
+    } catch (err) {
+      onWorkoutUpdated(previousWorkout);
+    }
+  };
+
+  const handleQuickAddSet = async (we) => {
+    const sets = we.sets || [];
+    const lastSet = sets[sets.length - 1];
+    const weight = lastSet ? lastSet.weight : 60;
+    const reps = lastSet ? lastSet.reps : 10;
+    const is_warmup = 0;
+
+    try {
+      const response = await api.addSet(we.id, { weight, reps, is_warmup });
+      onWorkoutUpdated(response.workout);
+    } catch (err) {
+      alert(err.message || 'Failed to add set');
+    }
+  };
+
   const handleStartEditSet = (set) => {
     setEditingSet({
       id: set.id,
@@ -407,57 +494,118 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                   </div>
                 )}
 
-                {/* Logged Sets Table */}
+                {/* Sets Table */}
                 {we.sets && we.sets.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="grid grid-cols-12 text-[11px] font-bold text-slate-400 uppercase tracking-wider px-2">
+                    <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-400 dark:text-slate-400 px-2">
                       <div className="col-span-2">Set</div>
                       <div className="col-span-4 text-center">Weight</div>
                       <div className="col-span-3 text-center">Reps</div>
-                      <div className="col-span-3 text-right">Actions</div>
+                      <div className="col-span-3 text-right">Complete</div>
                     </div>
 
-                    {we.sets.map((s) => (
-                      <div
-                        key={s.id}
-                        className={`grid grid-cols-12 items-center p-2 rounded-xl text-sm font-semibold transition-colors ${
-                          s.is_warmup
-                            ? 'bg-amber-500/10 border border-amber-500/20 text-amber-200'
-                            : 'bg-slate-950/80 border border-slate-800/80 text-white'
-                        }`}
-                      >
-                        <div className="col-span-2 flex items-center gap-1">
-                          <span className="font-mono text-slate-300 font-bold">#{s.set_number}</span>
-                          {s.is_warmup ? (
-                            <span className="text-[10px] px-1 bg-amber-500 text-slate-950 font-black rounded">
-                              W
+                    {we.sets.map((s) => {
+                      const isCompleted = !!s.completed_at;
+
+                      return (
+                        <div
+                          key={s.id}
+                          className={`grid grid-cols-12 items-center p-2 rounded-2xl text-sm transition-all ${
+                            isCompleted
+                              ? 'bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+                              : s.is_warmup
+                              ? 'bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200'
+                              : 'bg-slate-950/70 border border-slate-800 text-white'
+                          }`}
+                        >
+                          {/* Set number */}
+                          <div className="col-span-2 flex items-center gap-1 font-mono font-semibold">
+                            <span className={isCompleted ? 'text-emerald-400' : 'text-slate-300'}>
+                              #{s.set_number}
                             </span>
-                          ) : null}
+                            {s.is_warmup ? (
+                              <span className="text-[10px] px-1 bg-amber-500 text-slate-950 font-bold rounded">
+                                W
+                              </span>
+                            ) : null}
+                          </div>
+
+                          {/* Weight */}
+                          <div className="col-span-4 text-center font-mono font-semibold text-sm">
+                            {!isCompleted ? (
+                              <div className="inline-flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={s.weight ?? ''}
+                                  onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
+                                  className="w-14 bg-slate-900 border border-slate-700 text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[11px] text-slate-400 font-sans">kg</span>
+                              </div>
+                            ) : (
+                              <span>
+                                {s.weight} <span className="text-[11px] text-slate-400 font-sans">kg</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Reps */}
+                          <div className="col-span-3 text-center font-mono font-semibold text-sm">
+                            {!isCompleted ? (
+                              <div className="inline-flex items-center justify-center gap-1">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={s.reps ?? ''}
+                                  onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
+                                  className="w-12 bg-slate-900 border border-slate-700 text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                />
+                                <span className="text-[11px] text-slate-400 font-sans">reps</span>
+                              </div>
+                            ) : (
+                              <span>
+                                {s.reps} <span className="text-[11px] text-slate-400 font-sans">reps</span>
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Actions: Complete Checkmark & Delete */}
+                          <div className="col-span-3 flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleToggleSetComplete(s)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                                isCompleted
+                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30'
+                                  : 'border-2 border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400'
+                              }`}
+                              title={isCompleted ? 'Mark incomplete' : 'Complete set'}
+                            >
+                              <Check className="w-4 h-4 stroke-[2.5]" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSet(s.id)}
+                              className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg active:scale-90 transition-transform"
+                              title="Delete set"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
-                        <div className="col-span-4 text-center font-mono font-bold text-base">
-                          {s.weight} <span className="text-xs text-slate-400 font-sans">kg</span>
-                        </div>
-                        <div className="col-span-3 text-center font-mono font-bold text-base">
-                          {s.reps} <span className="text-xs text-slate-400 font-sans">reps</span>
-                        </div>
-                        <div className="col-span-3 flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => handleStartEditSet(s)}
-                            className="p-1.5 text-slate-400 hover:text-blue-400 rounded-lg active:bg-slate-800"
-                            title="Edit set"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSet(s.id)}
-                            className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg active:bg-slate-800"
-                            title="Delete set"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+
+                    {/* Quick Add Set button */}
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => handleQuickAddSet(we)}
+                        className="w-full py-2 bg-slate-950/60 hover:bg-slate-800/80 border border-dashed border-slate-800 rounded-xl text-xs font-semibold text-slate-400 hover:text-blue-400 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        Add Set
+                      </button>
+                    </div>
                   </div>
                 )}
 

@@ -71,10 +71,10 @@ export default function WorkoutHistory() {
     <div className="p-4 max-w-lg mx-auto pb-28 space-y-4 safe-top">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-black text-white">Workout History</h1>
-          <p className="text-xs text-slate-400">Review your past training sessions</p>
+          <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Workout History</h1>
+          <p className="text-xs text-slate-500 dark:text-slate-400">Review your past training sessions</p>
         </div>
-        <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded-xl text-xs font-mono font-bold text-slate-300">
+        <div className="px-3 py-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-mono font-medium text-slate-600 dark:text-slate-300">
           {history.length} logged
         </div>
       </div>
@@ -82,10 +82,10 @@ export default function WorkoutHistory() {
       {loading ? (
         <div className="text-center py-12 text-slate-400 text-sm">Loading workouts...</div>
       ) : history.length === 0 ? (
-        <div className="text-center py-16 px-4 border border-dashed border-slate-800 rounded-3xl bg-slate-900/40">
-          <Calendar className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-          <h3 className="text-sm font-bold text-white">No workouts recorded yet</h3>
-          <p className="text-xs text-slate-400 mt-1">Start a workout in the Workout tab to log your first session!</p>
+        <div className="text-center py-16 px-4 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900/40 shadow-sm">
+          <Calendar className="w-10 h-10 text-slate-400 dark:text-slate-600 mx-auto mb-2" />
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-white">No workouts recorded yet</h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Start a workout in the Workout tab to log your first session!</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -93,37 +93,37 @@ export default function WorkoutHistory() {
             <button
               key={w.id}
               onClick={() => handleOpenDetail(w.id)}
-              className="w-full text-left bg-slate-900 border border-slate-800/90 hover:border-slate-700/80 rounded-2xl p-4 shadow-lg active:scale-[0.99] transition-all group"
+              className="w-full text-left bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 hover:border-blue-400 dark:hover:border-slate-700 rounded-2xl p-4 shadow-sm active:scale-[0.99] transition-all group"
             >
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-white group-hover:text-blue-400 transition-colors">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white group-hover:text-blue-500 transition-colors">
                     {w.name}
                   </h3>
-                  <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     <span>{formatDate(w.started_at)}</span>
                     <span>•</span>
                     <span>{formatTime(w.started_at)}</span>
                   </div>
                 </div>
-                <div className="w-8 h-8 rounded-full bg-slate-800 group-hover:bg-blue-600 text-slate-400 group-hover:text-white flex items-center justify-center transition-colors">
+                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 group-hover:bg-blue-600 text-slate-500 dark:text-slate-400 group-hover:text-white flex items-center justify-center transition-colors">
                   <ChevronRight className="w-4 h-4" />
                 </div>
               </div>
 
               {/* Stats Bar */}
-              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-800/60 text-center">
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Duration</div>
-                  <div className="text-xs font-mono font-bold text-white">{w.duration_minutes || 0} min</div>
+              <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/60 text-center">
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-2 rounded-xl">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Duration</div>
+                  <div className="text-xs font-mono font-semibold text-slate-800 dark:text-white">{w.duration_minutes || 0} min</div>
                 </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Total Volume</div>
-                  <div className="text-xs font-mono font-bold text-blue-400">{Math.round(w.total_volume_kg)} kg</div>
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-2 rounded-xl">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Total Volume</div>
+                  <div className="text-xs font-mono font-semibold text-blue-600 dark:text-blue-400">{Math.round(w.total_volume_kg)} kg</div>
                 </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-400 uppercase font-semibold">Sets</div>
-                  <div className="text-xs font-mono font-bold text-white">{w.total_sets} sets</div>
+                <div className="bg-slate-50 dark:bg-slate-950/60 p-2 rounded-xl">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Sets</div>
+                  <div className="text-xs font-mono font-semibold text-slate-800 dark:text-white">{w.total_sets} sets</div>
                 </div>
               </div>
 
@@ -133,7 +133,7 @@ export default function WorkoutHistory() {
                   {w.exercise_names.map((name, i) => (
                     <span
                       key={i}
-                      className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-medium"
+                      className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-medium"
                     >
                       {name}
                     </span>
@@ -148,16 +148,16 @@ export default function WorkoutHistory() {
       {/* Workout Detail Modal */}
       {selectedWorkout && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="p-4 border-b border-slate-800 flex items-start justify-between">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-black text-white">{selectedWorkout.name}</h2>
-                <p className="text-xs text-slate-400 mt-0.5">{formatDate(selectedWorkout.started_at)}</p>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{selectedWorkout.name}</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{formatDate(selectedWorkout.started_at)}</p>
               </div>
               <button
                 onClick={() => setSelectedWorkout(null)}
-                className="w-8 h-8 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center active:bg-slate-700"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center active:bg-slate-200 dark:active:bg-slate-700"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -166,16 +166,16 @@ export default function WorkoutHistory() {
             {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {selectedWorkout.notes && (
-                <div className="p-3 bg-slate-950 rounded-2xl border border-slate-800 text-xs text-slate-300 italic">
+                <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 italic">
                   "{selectedWorkout.notes}"
                 </div>
               )}
 
               {selectedWorkout.exercises && selectedWorkout.exercises.map((we) => (
-                <div key={we.id} className="bg-slate-950 border border-slate-800/80 rounded-2xl p-3.5 space-y-2">
+                <div key={we.id} className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">{we.exercise_name}</span>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 px-2 py-0.5 bg-slate-800 rounded">
+                    <span className="font-semibold text-slate-900 dark:text-white text-sm">{we.exercise_name}</span>
+                    <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-200/70 dark:bg-slate-800 rounded">
                       {we.exercise_category}
                     </span>
                   </div>
@@ -184,12 +184,12 @@ export default function WorkoutHistory() {
                     {we.sets && we.sets.map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-slate-900/60 font-mono"
+                        className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-white dark:bg-slate-900/60 font-mono"
                       >
-                        <span className="text-slate-400">
+                        <span className="text-slate-500 dark:text-slate-400">
                           Set {s.set_number} {s.is_warmup ? '(Warmup)' : ''}
                         </span>
-                        <span className="font-bold text-white">
+                        <span className="font-semibold text-slate-900 dark:text-white">
                           {s.weight} kg × {s.reps} reps
                         </span>
                       </div>
@@ -200,17 +200,17 @@ export default function WorkoutHistory() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between">
+            <div className="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-between">
               <button
                 onClick={() => handleDeleteWorkout(selectedWorkout.id)}
-                className="px-3 py-2 text-red-400 hover:text-red-300 text-xs font-bold rounded-xl flex items-center gap-1.5 active:bg-red-950/40"
+                className="px-3 py-2 text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 active:bg-red-50 dark:active:bg-red-950/40"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Delete Workout
               </button>
               <button
                 onClick={() => setSelectedWorkout(null)}
-                className="px-5 py-2 bg-slate-800 text-white text-xs font-bold rounded-xl active:bg-slate-700"
+                className="px-5 py-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-white text-xs font-semibold rounded-xl active:bg-slate-300 dark:active:bg-slate-700"
               >
                 Close
               </button>
