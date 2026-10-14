@@ -984,18 +984,34 @@ async function getFullWorkoutDetails(workoutId) {
     args: [workoutId],
   });
 
-  const exercises = [];
-  for (const we of weRes.rows) {
-    const setsRes = await db.execute({
-      sql: 'SELECT * FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_number ASC',
-      args: [we.id],
-    });
-
-    exercises.push({
-      ...we,
-      sets: setsRes.rows,
-    });
+  if (weRes.rows.length === 0) {
+    return {
+      ...workout,
+      exercises: [],
+    };
   }
+
+  // Fetch all sets for all exercises in this workout in a single batch query
+  const weIds = weRes.rows.map((r) => r.id);
+  const placeholders = weIds.map(() => '?').join(',');
+  const setsRes = await db.execute({
+    sql: `SELECT * FROM workout_sets WHERE workout_exercise_id IN (${placeholders}) ORDER BY set_number ASC`,
+    args: weIds,
+  });
+
+  // Group sets by workout_exercise_id
+  const setsByWeId = {};
+  for (const s of setsRes.rows) {
+    if (!setsByWeId[s.workout_exercise_id]) {
+      setsByWeId[s.workout_exercise_id] = [];
+    }
+    setsByWeId[s.workout_exercise_id].push(s);
+  }
+
+  const exercises = weRes.rows.map((we) => ({
+    ...we,
+    sets: setsByWeId[we.id] || [],
+  }));
 
   return {
     ...workout,

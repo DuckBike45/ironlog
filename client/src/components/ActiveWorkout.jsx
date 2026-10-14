@@ -8,11 +8,43 @@ import RestTimer from './RestTimer';
 import ExerciseSelectorModal from './ExerciseSelectorModal';
 import ExerciseHistoryModal from './ExerciseHistoryModal';
 
+// Isolated Timer Component: Only this tiny component re-renders every 1s, preventing the entire workout tree from re-rendering
+function WorkoutDuration({ startedAt }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    let raw = startedAt || '';
+    if (raw && !raw.endsWith('Z') && !raw.includes('+')) {
+      raw = raw.replace(' ', 'T') + 'Z';
+    }
+    const startTime = new Date(raw).getTime() || Date.now();
+    const updateElapsed = () => {
+      const now = Date.now();
+      setElapsed(Math.max(0, Math.floor((now - startTime) / 1000)));
+    };
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [startedAt]);
+
+  const hrs = Math.floor(elapsed / 3600);
+  const mins = Math.floor((elapsed % 3600) / 60);
+  const secs = elapsed % 60;
+  const formatted = hrs > 0
+    ? `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`
+    : `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+  return (
+    <span className="font-mono text-lg font-black text-white">
+      {formatted}
+    </span>
+  );
+}
+
 export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorkout, onDiscardWorkout }) {
   const [showExerciseModal, setShowExerciseModal] = useState(false);
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [workoutNotes, setWorkoutNotes] = useState(workout.notes || '');
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [historyModalExercise, setHistoryModalExercise] = useState(null);
 
   // Map of exerciseId -> { loading, found, sets, workout }
@@ -23,23 +55,6 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   // Active inline editing set: { id, weight, reps, is_warmup } or null
   const [editingSet, setEditingSet] = useState(null);
-
-  // Calculate elapsed workout time
-  useEffect(() => {
-    // If started_at has no Z or timezone, append Z so browsers treat it as UTC
-    let raw = workout.started_at || '';
-    if (raw && !raw.endsWith('Z') && !raw.includes('+')) {
-      raw = raw.replace(' ', 'T') + 'Z';
-    }
-    const startTime = new Date(raw).getTime() || Date.now();
-    const updateElapsed = () => {
-      const now = Date.now();
-      setElapsedSeconds(Math.max(0, Math.floor((now - startTime) / 1000)));
-    };
-    updateElapsed();
-    const interval = setInterval(updateElapsed, 1000);
-    return () => clearInterval(interval);
-  }, [workout.started_at]);
 
   // Load last performance for all exercises in this workout
   useEffect(() => {
@@ -59,16 +74,6 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     } catch (err) {
       console.error('Failed to load performance for exercise', exerciseId, err);
     }
-  };
-
-  const formatDuration = (totalSecs) => {
-    const hrs = Math.floor(totalSecs / 3600);
-    const mins = Math.floor((totalSecs % 3600) / 60);
-    const secs = totalSecs % 60;
-    if (hrs > 0) {
-      return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
-    }
-    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   // Helper: Get or initialize draft inputs for an exercise
@@ -150,6 +155,44 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       return;
     }
 
+    // 1. Optimistic Update: Immediately reflect new set in UI (0ms latency)
+    const optimisticSetId = 'temp_' + Date.now();
+    const nextSetNumber = ((we.sets && we.sets.length) || 0) + 1;
+    const optimisticSet = {
+      id: optimisticSetId,
+      workout_exercise_id: we.id,
+      set_number: nextSetNumber,
+      weight,
+      reps,
+      is_warmup: current.is_warmup ? 1 : 0,
+      completed_at: new Date().toISOString(),
+    };
+
+    const previousWorkout = workout;
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => {
+        if (e.id === we.id) {
+          return {
+            ...e,
+            sets: [...(e.sets || []), optimisticSet],
+          };
+        }
+        return e;
+      }),
+    };
+
+    // Instantly update UI and advance draft input
+    onWorkoutUpdated(optimisticWorkout);
+    setSetInputs((prev) => ({
+      ...prev,
+      [we.id]: {
+        weight: weight.toString(),
+        reps: reps.toString(),
+        is_warmup: false,
+      },
+    }));
+
     try {
       const response = await api.addSet(we.id, {
         weight,
@@ -157,28 +200,34 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         is_warmup: current.is_warmup ? 1 : 0,
       });
 
-      // Update workout state
+      // Reconcile with verified server response
       onWorkoutUpdated(response.workout);
-
-      // Pre-fill next set with the same weight and reps!
-      setSetInputs((prev) => ({
-        ...prev,
-        [we.id]: {
-          weight: weight.toString(),
-          reps: reps.toString(),
-          is_warmup: false,
-        },
-      }));
     } catch (err) {
+      // Revert on error
+      onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to log set');
     }
   };
 
   const handleDeleteSet = async (setId) => {
+    const previousWorkout = workout;
+    // Optimistic delete
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || [])
+          .filter((s) => s.id !== setId)
+          .map((s, idx) => ({ ...s, set_number: idx + 1 })),
+      })),
+    };
+    onWorkoutUpdated(optimisticWorkout);
+
     try {
       const response = await api.deleteSet(setId);
       onWorkoutUpdated(response.workout);
     } catch (err) {
+      onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to delete set');
     }
   };
@@ -194,15 +243,42 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   const handleSaveEditSet = async () => {
     if (!editingSet) return;
+    const previousWorkout = workout;
+    const updatedWeight = parseFloat(editingSet.weight);
+    const updatedReps = parseInt(editingSet.reps, 10);
+    const updatedWarmup = editingSet.is_warmup ? 1 : 0;
+
+    // Optimistic edit
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === editingSet.id) {
+            return {
+              ...s,
+              weight: updatedWeight,
+              reps: updatedReps,
+              is_warmup: updatedWarmup,
+            };
+          }
+          return s;
+        }),
+      })),
+    };
+
+    onWorkoutUpdated(optimisticWorkout);
+    setEditingSet(null);
+
     try {
       const response = await api.updateSet(editingSet.id, {
-        weight: parseFloat(editingSet.weight),
-        reps: parseInt(editingSet.reps, 10),
-        is_warmup: editingSet.is_warmup ? 1 : 0,
+        weight: updatedWeight,
+        reps: updatedReps,
+        is_warmup: updatedWarmup,
       });
       onWorkoutUpdated(response.workout);
-      setEditingSet(null);
     } catch (err) {
+      onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to update set');
     }
   };
@@ -226,9 +302,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span className="font-mono text-lg font-black text-white">
-              {formatDuration(elapsedSeconds)}
-            </span>
+            <WorkoutDuration startedAt={workout.started_at} />
           </div>
         </div>
 
