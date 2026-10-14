@@ -76,7 +76,7 @@ export default function ExerciseLibrary() {
     });
 
   return (
-    <div className="p-4 max-w-lg mx-auto pb-28 space-y-4">
+    <div className="p-4 max-w-lg mx-auto pb-28 space-y-4 safe-top">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

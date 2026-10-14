@@ -224,7 +224,7 @@ export default function App() {
                   />
                 ) : (
                   /* Start Workout Welcome Screen */
-                  <div className="p-4 max-w-lg mx-auto pb-28 space-y-5">
+                  <div className="p-4 max-w-lg mx-auto pb-28 space-y-5 safe-top">
                     {/* App Hero */}
                     <div className="text-center space-y-1.5 pt-2">
                       <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-500 border border-blue-500/20 flex items-center justify-center mx-auto shadow-inner">

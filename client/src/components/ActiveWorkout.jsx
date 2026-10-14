@@ -218,8 +218,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   return (
     <div className="pb-28">
-      {/* Top Header Bar (Scrolls away with page) */}
-      <div className="bg-slate-950 border-b border-slate-800/80 px-4 py-3 flex items-center justify-between">
+      {/* Top Header Bar (Scrolls away with page, respects iOS safe area / notch) */}
+      <div className="bg-slate-950 border-b border-slate-800/80 px-4 pb-3 safe-top flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
             Active Workout
@@ -249,8 +249,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         </div>
       </div>
 
-      {/* Floating Rest Timer bar (Only this sticks to top when scrolling) */}
-      <div className="sticky top-0 z-30 shadow-md">
+      {/* Floating Rest Timer bar (Sticks to top beneath iOS status bar when scrolling) */}
+      <div className="sticky safe-top-sticky z-30 shadow-md">
         <RestTimer />
       </div>
 

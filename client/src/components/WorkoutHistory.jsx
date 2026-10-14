@@ -68,7 +68,7 @@ export default function WorkoutHistory() {
   };
 
   return (
-    <div className="p-4 max-w-lg mx-auto pb-28 space-y-4">
+    <div className="p-4 max-w-lg mx-auto pb-28 space-y-4 safe-top">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-black text-white">Workout History</h1>

@@ -29,6 +29,19 @@ input, select, textarea {
   border-radius: 4px;
 }
 
+/* iOS Safe Area Utilities for Home Screen PWA */
+.safe-top {
+  padding-top: max(12px, env(safe-area-inset-top));
+}
+
+.safe-top-sticky {
+  top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-8px); }
