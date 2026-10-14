@@ -1,0 +1,754 @@
+﻿[
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Hurdle Walk",
+        "Weight":  0,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Hurdle Walk",
+        "Weight":  0,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Hurdle Walk",
+        "Weight":  0,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Squat",
+        "Weight":  70,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Squat",
+        "Weight":  80,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Squat",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Squat",
+        "Weight":  100,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Squat",
+        "Weight":  110,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Hang Clean",
+        "Weight":  50,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Hang Clean",
+        "Weight":  50,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  20,
+        "Reps":  25,
+        "Warmup":  true,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  70,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  27,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  27,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  27,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "10.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  30,
+        "Reps":  60,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  30,
+        "Reps":  60,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  20,
+        "Reps":  25,
+        "Warmup":  true,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  65,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  75,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  85,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  95,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  95,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  40,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  40,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  40,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Clean",
+        "Weight":  50,
+        "Reps":  3,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Clean",
+        "Weight":  50,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  5,
+        "Reps":  3,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  5,
+        "Reps":  3,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  5,
+        "Reps":  3,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "06.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  0,
+        "Reps":  30,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  32,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  32,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  32,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  50,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  70,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  80,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  80,
+        "Reps":  3,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  20,
+        "Reps":  25,
+        "Warmup":  true,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  60,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  80,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  85,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  85,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  85,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  85,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  21,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  21,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Dumbell Bicep Curl",
+        "Weight":  21,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "04.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  5,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  16,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  40,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Lunges",
+        "Weight":  40,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  60,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Deadlift",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Clean",
+        "Weight":  40,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Clean",
+        "Weight":  40,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  20,
+        "Reps":  20,
+        "Warmup":  true,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  60,
+        "Reps":  8,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  70,
+        "Reps":  6,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  80,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Bench Press",
+        "Weight":  90,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  5,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Pull Up",
+        "Weight":  0,
+        "Reps":  4,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  0,
+        "Reps":  15,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  0,
+        "Reps":  14,
+        "Warmup":  false,
+        "Notes":  ""
+    },
+    {
+        "Date":  "01.10.2026",
+        "Exercise":  "Abs",
+        "Weight":  0,
+        "Reps":  10,
+        "Warmup":  false,
+        "Notes":  ""
+    }
+]

@@ -105,6 +105,194 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// Import historical workouts into a user profile
+app.post('/api/admin/import-history', async (req, res) => {
+  try {
+    const { userName = 'Tommi', rows = [] } = req.body;
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'No rows provided' });
+    }
+
+    // 1. Find or create user
+    let userRes = await db.execute({
+      sql: 'SELECT id FROM users WHERE LOWER(name) = LOWER(?) LIMIT 1',
+      args: [userName.trim()],
+    });
+
+    let targetUserId;
+    if (userRes.rows.length === 0) {
+      const createRes = await db.execute({
+        sql: 'INSERT INTO users (name, is_demo) VALUES (?, 0)',
+        args: [userName.trim()],
+      });
+      targetUserId = Number(createRes.lastInsertRowid);
+    } else {
+      targetUserId = userRes.rows[0].id;
+    }
+
+    // Name mapping dictionary for common synonyms
+    const nameMap = {
+      'squat': 'Barbell Squat',
+      'bench press': 'Barbell Bench Press',
+      'deadlift': 'Barbell Deadlift',
+      'pull up': 'Pull-up',
+      'pull-up': 'Pull-up',
+      'dumbell bicep curl': 'Dumbbell Bicep Curl',
+      'dumbbell bicep curl': 'Dumbbell Bicep Curl',
+    };
+
+    // Category mapping for new exercises
+    const categoryMap = {
+      'Hurdle Walk': 'Legs',
+      'Hang Clean': 'Back',
+      'Clean': 'Back',
+      'Lunges': 'Legs',
+      'Abs': 'Core',
+    };
+
+    // Helper: find or create exercise
+    async function getOrCreateExercise(rawName) {
+      const cleanName = rawName.trim();
+      const mappedName = nameMap[cleanName.toLowerCase()] || cleanName;
+
+      const exCheck = await db.execute({
+        sql: 'SELECT id, name FROM exercises WHERE LOWER(name) = LOWER(?) LIMIT 1',
+        args: [mappedName],
+      });
+
+      if (exCheck.rows.length > 0) {
+        return exCheck.rows[0].id;
+      }
+
+      // Check if partially matching
+      const partialCheck = await db.execute({
+        sql: 'SELECT id, name FROM exercises WHERE name LIKE ? LIMIT 1',
+        args: [`%${cleanName}%`],
+      });
+
+      if (partialCheck.rows.length > 0) {
+        return partialCheck.rows[0].id;
+      }
+
+      // Insert new exercise
+      const category = categoryMap[cleanName] || 'Other';
+      const insertRes = await db.execute({
+        sql: 'INSERT INTO exercises (name, category, notes) VALUES (?, ?, ?)',
+        args: [cleanName, category, 'Imported from RepCount'],
+      });
+      return Number(insertRes.lastInsertRowid);
+    }
+
+    // Group rows by Date
+    const sessionsByDate = {};
+    for (const r of rows) {
+      if (!sessionsByDate[r.Date]) {
+        sessionsByDate[r.Date] = [];
+      }
+      sessionsByDate[r.Date].push(r);
+    }
+
+    let workoutsCreated = 0;
+    let setsCreated = 0;
+
+    for (const [dateStr, setRows] of Object.entries(sessionsByDate)) {
+      // Parse DD.MM.YYYY to ISO
+      const parts = dateStr.split('.');
+      let workoutDateIso;
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        workoutDateIso = new Date(Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 10, 0, 0)).toISOString();
+      } else {
+        workoutDateIso = new Date().toISOString();
+      }
+
+      const completedDateIso = new Date(new Date(workoutDateIso).getTime() + 65 * 60 * 1000).toISOString();
+
+      // Check if workout already exists on this date for this user to avoid duplicates
+      const existingWorkout = await db.execute({
+        sql: "SELECT id FROM workouts WHERE user_id = ? AND started_at LIKE ? LIMIT 1",
+        args: [targetUserId, `${workoutDateIso.slice(0, 10)}%`],
+      });
+
+      let workoutId;
+      if (existingWorkout.rows.length > 0) {
+        workoutId = existingWorkout.rows[0].id;
+      } else {
+        const wRes = await db.execute({
+          sql: 'INSERT INTO workouts (name, started_at, completed_at, notes, user_id) VALUES (?, ?, ?, ?, ?)',
+          args: [`Workout - ${dateStr}`, workoutDateIso, completedDateIso, 'Imported workout history', targetUserId],
+        });
+        workoutId = Number(wRes.lastInsertRowid);
+        workoutsCreated++;
+      }
+
+      // Group exercises in this workout session
+      // Keep track of order of exercises
+      const exercisesInSession = [];
+      const setsByExerciseName = {};
+
+      for (const item of setRows) {
+        const exName = item.Exercise.trim();
+        if (!setsByExerciseName[exName]) {
+          setsByExerciseName[exName] = [];
+          exercisesInSession.push(exName);
+        }
+        setsByExerciseName[exName].push(item);
+      }
+
+      for (let orderIdx = 0; orderIdx < exercisesInSession.length; orderIdx++) {
+        const exName = exercisesInSession[orderIdx];
+        const exId = await getOrCreateExercise(exName);
+
+        // Check if workout_exercise already exists
+        let weId;
+        const weCheck = await db.execute({
+          sql: 'SELECT id FROM workout_exercises WHERE workout_id = ? AND exercise_id = ? LIMIT 1',
+          args: [workoutId, exId],
+        });
+
+        if (weCheck.rows.length > 0) {
+          weId = weCheck.rows[0].id;
+        } else {
+          const weRes = await db.execute({
+            sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index) VALUES (?, ?, ?)',
+            args: [workoutId, exId, orderIdx],
+          });
+          weId = Number(weRes.lastInsertRowid);
+        }
+
+        const sets = setsByExerciseName[exName];
+        for (let setIdx = 0; setIdx < sets.length; setIdx++) {
+          const s = sets[setIdx];
+          await db.execute({
+            sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [
+              weId,
+              setIdx + 1,
+              parseFloat(s.Weight) || 0,
+              parseInt(s.Reps, 10) || 0,
+              s.Warmup ? 1 : 0,
+              workoutDateIso,
+            ],
+          });
+          setsCreated++;
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      user_id: targetUserId,
+      workoutsCreated,
+      setsCreated,
+      message: `Successfully imported ${workoutsCreated} workouts and ${setsCreated} sets for profile "${userName}".`,
+    });
+  } catch (err) {
+    console.error('Error importing history:', err);
+    res.status(500).json({ error: 'Failed to import history: ' + err.message });
+  }
+});
+
 // ==========================================
 // 1. Health Check
 // ==========================================
