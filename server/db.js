@@ -164,6 +164,14 @@ async function initDb() {
 
   initPromise = (async () => {
     try {
+      // 0. Performance PRAGMAs (WAL mode, memory temp store, 64MB cache)
+      try {
+        await db.execute('PRAGMA journal_mode = WAL;');
+        await db.execute('PRAGMA synchronous = NORMAL;');
+        await db.execute('PRAGMA temp_store = MEMORY;');
+        await db.execute('PRAGMA cache_size = -64000;');
+      } catch (_) {}
+
       // 1. Users table
       await db.execute(`
         CREATE TABLE IF NOT EXISTS users (
@@ -282,10 +290,13 @@ async function initDb() {
 
       // Indexes
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_workouts_user ON workouts(user_id);`);
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_workouts_completed ON workouts(user_id, completed_at DESC);`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_templates_user ON templates(user_id);`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_we_workout ON workout_exercises(workout_id);`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_we_exercise ON workout_exercises(exercise_id);`);
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_we_lookup ON workout_exercises(workout_id, exercise_id);`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_sets_we ON workout_sets(workout_exercise_id);`);
+      await db.execute(`CREATE INDEX IF NOT EXISTS idx_sets_lookup ON workout_sets(workout_exercise_id, set_number);`);
       await db.execute(`CREATE INDEX IF NOT EXISTS idx_te_template ON template_exercises(template_id);`);
 
       // Seed starter catalog if empty

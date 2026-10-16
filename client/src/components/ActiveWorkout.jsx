@@ -623,7 +623,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   return (
     <div className="pb-28">
       {/* Top Header Bar (Solid background, guaranteed clearance below notch/status bar) */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),52px)] flex items-center justify-between transition-colors shadow-xs">
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pb-3 pt-[max(calc(env(safe-area-inset-top,0px)+14px),64px)] flex items-center justify-between transition-colors shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 tracking-wider uppercase">

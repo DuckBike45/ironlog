@@ -30,7 +30,7 @@ body {
 
 /* iOS Safe Area Utilities for Home Screen PWA */
 .safe-top {
-  padding-top: max(48px, env(safe-area-inset-top, 0px));
+  padding-top: max(64px, calc(env(safe-area-inset-top, 0px) + 16px));
 }
 
 .safe-top-sticky {

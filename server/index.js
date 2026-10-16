@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const path = require('node:path');
 const { db, initDb } = require('./db');
 
@@ -8,6 +9,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
+app.use(compression());
 app.use(express.json());
 
 // Ensure database initialization runs on first request

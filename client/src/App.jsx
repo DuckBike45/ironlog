@@ -244,130 +244,136 @@ export default function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'workout' && (
-              <>
-                {activeWorkout ? (
-                  <ActiveWorkout
-                    workout={activeWorkout}
-                    onWorkoutUpdated={handleWorkoutUpdated}
-                    onFinishWorkout={handleFinishWorkout}
-                    onDiscardWorkout={handleDiscardWorkout}
-                  />
-                ) : (
-                  /* Start Workout Welcome Screen */
-                  <div className="p-4 max-w-lg mx-auto pb-28 space-y-5 safe-top">
-                    {/* App Hero */}
-                    <div className="text-center space-y-1.5 pt-2">
-                      <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center mx-auto shadow-inner">
-                        <Dumbbell className="w-7 h-7" />
+            {/* Workout Tab */}
+            <div className={activeTab === 'workout' ? 'block' : 'hidden'}>
+              {activeWorkout ? (
+                <ActiveWorkout
+                  workout={activeWorkout}
+                  onWorkoutUpdated={handleWorkoutUpdated}
+                  onFinishWorkout={handleFinishWorkout}
+                  onDiscardWorkout={handleDiscardWorkout}
+                />
+              ) : (
+                /* Start Workout Welcome Screen */
+                <div className="p-4 max-w-lg mx-auto pb-28 space-y-5 safe-top">
+                  {/* App Hero */}
+                  <div className="text-center space-y-1.5 pt-2">
+                    <div className="w-14 h-14 rounded-2xl bg-blue-600/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center mx-auto shadow-inner">
+                      <Dumbbell className="w-7 h-7" />
+                    </div>
+                    <h1 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">IronLog Tracker</h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                      Logged in as <span className="font-semibold text-slate-700 dark:text-slate-200">{auth.userName}</span>
+                    </p>
+                  </div>
+
+                  {/* SECTION: Workout Templates */}
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between px-1">
+                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span>Workout Templates</span>
                       </div>
-                      <h1 className="text-2xl font-semibold text-slate-900 dark:text-white tracking-tight">IronLog Tracker</h1>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                        Logged in as <span className="font-semibold text-slate-700 dark:text-slate-200">{auth.userName}</span>
-                      </p>
+                      <button
+                        onClick={() => setShowTemplateManager(true)}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                      >
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        Manage Templates
+                      </button>
                     </div>
 
-                    {/* SECTION: Workout Templates */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center justify-between px-1">
-                        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                          <span>Workout Templates</span>
-                        </div>
+                    {templates.length === 0 ? (
+                      <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-5 text-center space-y-2 shadow-sm">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                          No workout templates created yet. Set up standard routines (e.g. "Push Day", "Pull Day") so you don't have to add exercises every workout.
+                        </p>
                         <button
                           onClick={() => setShowTemplateManager(true)}
-                          className="px-2.5 py-1 bg-white hover:bg-slate-100 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-sm"
+                          className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 shadow-sm"
                         >
-                          <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                          Manage Templates
+                          <Plus className="w-3.5 h-3.5" />
+                          Create Your First Template
                         </button>
                       </div>
-
-                      {templates.length === 0 ? (
-                        <div className="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-2xl p-5 text-center space-y-2 shadow-sm">
-                          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                            No workout templates created yet. Set up standard routines (e.g. "Push Day", "Pull Day") so you don't have to add exercises every workout.
-                          </p>
-                          <button
-                            onClick={() => setShowTemplateManager(true)}
-                            className="px-4 py-2 bg-blue-600 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-1.5 shadow-sm"
+                    ) : (
+                      <div className="space-y-2.5">
+                        {templates.map((tpl) => (
+                          <div
+                            key={tpl.id}
+                            className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-4 shadow-sm space-y-2.5"
                           >
-                            <Plus className="w-3.5 h-3.5" />
-                            Create Your First Template
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {templates.map((tpl) => (
-                            <div
-                              key={tpl.id}
-                              className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/90 rounded-2xl p-4 shadow-sm space-y-2.5"
-                            >
-                              <div className="flex items-start justify-between">
-                                <div>
-                                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{tpl.name}</h3>
-                                  {tpl.notes && <p className="text-xs text-slate-500 dark:text-slate-400">{tpl.notes}</p>}
-                                </div>
-                                <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-100 dark:bg-slate-950 rounded-lg">
-                                  {tpl.exercises?.length || 0} lifts
-                                </span>
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{tpl.name}</h3>
+                                {tpl.notes && <p className="text-xs text-slate-500 dark:text-slate-400">{tpl.notes}</p>}
                               </div>
-
-                              {/* Exercises Preview Tags */}
-                              {tpl.exercises && tpl.exercises.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {tpl.exercises.map((e, idx) => (
-                                    <span
-                                      key={e.id || idx}
-                                      className="px-2 py-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-[11px] text-slate-600 dark:text-slate-300 font-medium"
-                                    >
-                                      {e.exercise_name}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-
-                              <button
-                                onClick={() => handleStartFromTemplate(tpl.id)}
-                                className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                Start {tpl.name}
-                              </button>
+                              <span className="text-xs font-mono font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-100 dark:bg-slate-950 rounded-lg">
+                                {tpl.exercises?.length || 0} lifts
+                              </span>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
 
-                    {/* SECTION: Start Blank Workout */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm space-y-3">
-                      <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Or Start Blank Workout
+                            {/* Exercises Preview Tags */}
+                            {tpl.exercises && tpl.exercises.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {tpl.exercises.map((e, idx) => (
+                                  <span
+                                    key={e.id || idx}
+                                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded text-[11px] text-slate-600 dark:text-slate-300 font-medium"
+                                  >
+                                    {e.exercise_name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <button
+                              onClick={() => handleStartFromTemplate(tpl.id)}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              Start {tpl.name}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                      <form onSubmit={handleStartWorkout} className="space-y-3">
-                        <input
-                          type="text"
-                          value={workoutName}
-                          onChange={(e) => setWorkoutName(e.target.value)}
-                          placeholder="Workout Name (e.g. Free Session)..."
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
-                        />
-                        <button
-                          type="submit"
-                          className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-current text-blue-500" />
-                          Start Empty Workout
-                        </button>
-                      </form>
-                    </div>
+                    )}
                   </div>
-                )}
-              </>
-            )}
 
-            {activeTab === 'history' && <WorkoutHistory />}
-            {activeTab === 'exercises' && <ExerciseLibrary />}
+                  {/* SECTION: Start Blank Workout */}
+                  <div className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800/80 rounded-2xl p-4 shadow-sm space-y-3">
+                    <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Or Start Blank Workout
+                    </div>
+                    <form onSubmit={handleStartWorkout} className="space-y-3">
+                      <input
+                        type="text"
+                        value={workoutName}
+                        onChange={(e) => setWorkoutName(e.target.value)}
+                        placeholder="Workout Name (e.g. Free Session)..."
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="submit"
+                        className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current text-blue-500" />
+                        Start Empty Workout
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* History Tab (Preserved in DOM for instant 0ms switching) */}
+            <div className={activeTab === 'history' ? 'block' : 'hidden'}>
+              <WorkoutHistory />
+            </div>
+
+            {/* Exercises Tab (Preserved in DOM for instant 0ms switching) */}
+            <div className={activeTab === 'exercises' ? 'block' : 'hidden'}>
+              <ExerciseLibrary />
+            </div>
           </>
         )}
       </main>

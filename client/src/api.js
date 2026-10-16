@@ -29,10 +29,15 @@ async function request(endpoint, options = {}) {
   return res.json();
 }
 
+let exercisesCache = null;
+let exercisesCachePromise = null;
+
 export const api = {
   // Session & User Context
   setUserId: (id) => {
     currentUserId = id;
+    // Invalidate exercise cache if user changes
+    exercisesCache = null;
   },
 
   getUserId: () => currentUserId,
@@ -52,25 +57,54 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  // Exercises
-  getExercises: (search = '', category = '') => {
-    const params = new URLSearchParams();
-    if (search) params.append('search', search);
-    if (category) params.append('category', category);
-    return request(`/exercises?${params.toString()}`);
+  // Exercises (Cached in-memory for instant 0ms modal opening and live filtering)
+  getExercises: async (search = '', category = '') => {
+    if (!exercisesCache) {
+      if (!exercisesCachePromise) {
+        exercisesCachePromise = request('/exercises')
+          .then((data) => {
+            exercisesCache = data;
+            exercisesCachePromise = null;
+            return data;
+          })
+          .catch((err) => {
+            exercisesCachePromise = null;
+            throw err;
+          });
+      }
+      await exercisesCachePromise;
+    }
+
+    let list = exercisesCache || [];
+    if (category && category !== 'All') {
+      list = list.filter((ex) => (ex.category || '').toLowerCase() === category.toLowerCase());
+    }
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((ex) => (ex.name || '').toLowerCase().includes(q));
+    }
+    return list;
   },
 
-  createExercise: (data) =>
-    request('/exercises', {
+  invalidateExercisesCache: () => {
+    exercisesCache = null;
+  },
+
+  createExercise: async (data) => {
+    exercisesCache = null; // Invalidate cache
+    return request('/exercises', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
-  updateExercise: (id, data) =>
-    request(`/exercises/${id}`, {
+  updateExercise: async (id, data) => {
+    exercisesCache = null; // Invalidate cache
+    return request(`/exercises/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
   getLastPerformance: (exerciseId, excludeWorkoutId) => {
     const params = new URLSearchParams();
