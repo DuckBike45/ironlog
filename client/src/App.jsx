@@ -28,12 +28,12 @@ export default function App() {
   const [templates, setTemplates] = useState([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
 
-  // Theme state
+  // Theme state: defaults to 'light'
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem('ironlog_theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      return localStorage.getItem('ironlog_theme') || 'light';
     } catch {
-      return 'dark';
+      return 'light';
     }
   });
 
@@ -196,11 +196,18 @@ export default function App() {
 
   // Auth Gates
   if (!auth) {
-    return <PinEntry onSuccess={handlePinSuccess} />;
+    return <PinEntry onSuccess={handlePinSuccess} theme={theme} onToggleTheme={toggleTheme} />;
   }
 
   if (auth.mode === 'family' && !auth.userId) {
-    return <ProfileSelector onSelect={handleProfileSelect} onSwitchPin={handleResetPin} />;
+    return (
+      <ProfileSelector
+        onSelect={handleProfileSelect}
+        onSwitchPin={handleResetPin}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
+    );
   }
 
   return (

@@ -150,6 +150,12 @@ export const api = {
       method: 'DELETE',
     }),
 
+  replaceWorkoutExercise: (workoutExerciseId, newExerciseId) =>
+    request(`/workout-exercises/${workoutExerciseId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ exercise_id: newExerciseId }),
+    }),
+
   addSet: (workoutExerciseId, setData) =>
     request(`/workout-exercises/${workoutExerciseId}/sets`, {
       method: 'POST',

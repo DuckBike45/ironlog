@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Check, Trash2, Edit3, X, Dumbbell, History, 
-  ChevronDown, ChevronUp, AlertTriangle, Sparkles 
+  ChevronDown, ChevronUp, AlertTriangle, Sparkles, ArrowLeftRight 
 } from 'lucide-react';
 import { api } from '../api';
 import RestTimer from './RestTimer';
@@ -35,7 +35,7 @@ function WorkoutDuration({ startedAt }) {
     : `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
 
   return (
-    <span className="font-mono text-lg font-black text-white">
+    <span className="font-mono text-lg font-bold text-slate-900 dark:text-white">
       {formatted}
     </span>
   );
@@ -46,6 +46,48 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [workoutNotes, setWorkoutNotes] = useState(workout.notes || '');
   const [historyModalExercise, setHistoryModalExercise] = useState(null);
+  const [replacingExercise, setReplacingExercise] = useState(null);
+
+  // Screen Wake Lock: keeps display awake during active workouts
+  const [wakeLockActive, setWakeLockActive] = useState(false);
+  const wakeLockRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          if (isMounted) setWakeLockActive(true);
+          wakeLockRef.current.addEventListener('release', () => {
+            if (isMounted) setWakeLockActive(false);
+          });
+        }
+      } catch (err) {
+        if (isMounted) setWakeLockActive(false);
+      }
+    };
+
+    requestWakeLock();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMounted = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, []);
 
   // Map of exerciseId -> { loading, found, sets, workout }
   const [lastPerformances, setLastPerformances] = useState({});
@@ -132,6 +174,19 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       loadLastPerformance(exercise.id);
     } catch (err) {
       alert(err.message || 'Failed to add exercise');
+    }
+  };
+
+  const handleSwapExercise = async (newExercise) => {
+    if (!replacingExercise) return;
+    const targetExerciseId = replacingExercise.id;
+    setReplacingExercise(null);
+    try {
+      const updated = await api.replaceWorkoutExercise(targetExerciseId, newExercise.id);
+      onWorkoutUpdated(updated);
+      loadLastPerformance(newExercise.id);
+    } catch (err) {
+      alert(err.message || 'Failed to replace exercise');
     }
   };
 
@@ -382,13 +437,21 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   return (
     <div className="pb-28">
       {/* Top Header Bar (Scrolls away with page, respects iOS safe area / notch) */}
-      <div className="bg-slate-950 border-b border-slate-800/80 px-4 pb-3 safe-top flex items-center justify-between">
+      <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800/80 px-4 pb-3 safe-top flex items-center justify-between transition-colors">
         <div>
-          <div className="text-xs font-semibold text-blue-400 tracking-wider uppercase">
-            Active Workout
-          </div>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
+              Active Workout
+            </span>
+            {wakeLockActive && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Screen On
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
             <WorkoutDuration startedAt={workout.started_at} />
           </div>
         </div>
@@ -396,22 +459,22 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         <div className="flex items-center gap-2">
           <button
             onClick={() => onDiscardWorkout(workout.id)}
-            className="px-3 py-1.5 text-xs font-semibold text-slate-400 hover:text-red-400 active:scale-95"
+            className="px-3 py-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 active:scale-95 transition-colors"
           >
             Discard
           </button>
           <button
             onClick={() => setShowFinishModal(true)}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all flex items-center gap-1.5"
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
           >
-            <Check className="w-4 h-4 stroke-[3]" />
+            <Check className="w-4 h-4 stroke-[2.5]" />
             Finish
           </button>
         </div>
       </div>
 
-      {/* Floating Rest Timer bar (Sticks to top beneath iOS status bar when scrolling) */}
-      <div className="sticky safe-top-sticky z-30 shadow-md">
+      {/* Floating Rest Timer bar (Sticks to top beneath iOS status bar with seamless background coverage) */}
+      <div className="sticky top-0 z-30 shadow-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-md pt-[env(safe-area-inset-top)]">
         <RestTimer />
       </div>
 
@@ -419,19 +482,19 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
         {/* Exercises List */}
         {workout.exercises && workout.exercises.length === 0 ? (
-          <div className="text-center py-12 px-4 border border-dashed border-slate-800 rounded-3xl bg-slate-900/40">
-            <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-400 flex items-center justify-center mx-auto mb-3">
+          <div className="text-center py-12 px-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-3xl bg-white/60 dark:bg-slate-900/40">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-600/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-3">
               <Dumbbell className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white mb-1">Your workout is empty</h3>
-            <p className="text-xs text-slate-400 mb-4 max-w-xs mx-auto">
+            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-1">Your workout is empty</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 max-w-xs mx-auto">
               Tap below to choose your first exercise and start logging sets!
             </p>
             <button
               onClick={() => setShowExerciseModal(true)}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold rounded-2xl inline-flex items-center gap-2 shadow-lg shadow-blue-600/30 active:scale-95 transition-all"
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold rounded-2xl inline-flex items-center gap-2 shadow-sm active:scale-95 transition-all"
             >
-              <Plus className="w-4 h-4 stroke-[3]" />
+              <Plus className="w-4 h-4" />
               Add Exercise
             </button>
           </div>
@@ -443,17 +506,28 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
             return (
               <div
                 key={we.id}
-                className="bg-slate-900 border border-slate-800/90 rounded-3xl p-4 shadow-xl space-y-3"
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/90 rounded-3xl p-4 shadow-sm space-y-3"
               >
                 {/* Exercise Header */}
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="text-base font-black text-white">{we.exercise_name}</h3>
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[10px] font-semibold uppercase tracking-wider mt-0.5">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{we.exercise_name}</h3>
+                    <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-medium tracking-wide mt-0.5">
                       {we.exercise_category}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
+                    {/* Swap / Replace button */}
+                    <button
+                      type="button"
+                      onClick={() => setReplacingExercise(we)}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-xs"
+                      title="Replace exercise (retains sets & order)"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" />
+                      <span>Swap</span>
+                    </button>
+
                     <button
                       onClick={() =>
                         setHistoryModalExercise({
@@ -462,7 +536,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           category: we.exercise_category,
                         })
                       }
-                      className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-400 text-xs font-bold rounded-xl flex items-center gap-1 active:scale-95 transition-all"
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-xs"
                       title="View chronological history for this exercise"
                     >
                       <History className="w-3.5 h-3.5" />
@@ -470,7 +544,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                     </button>
                     <button
                       onClick={() => handleRemoveExercise(we.id)}
-                      className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg active:bg-slate-800"
+                      className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg active:bg-slate-100 dark:active:bg-slate-800 transition-colors"
                       title="Remove exercise"
                     >
                       <X className="w-4 h-4" />
@@ -480,10 +554,10 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
                 {/* Previous Performance Context Pill */}
                 {perf && perf.found && (
-                  <div className="p-2.5 bg-blue-950/40 border border-blue-900/50 rounded-xl flex items-start gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
-                    <div className="text-xs text-slate-300 leading-snug">
-                      <span className="text-blue-400 font-bold">Last Session: </span>
+                  <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl flex items-start gap-2">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                    <div className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
+                      <span className="text-blue-600 dark:text-blue-400 font-semibold">Last Session: </span>
                       {perf.sets.map((s, idx) => (
                         <span key={s.id} className="font-mono font-medium">
                           {s.weight}kg × {s.reps}
@@ -497,7 +571,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 {/* Sets Table */}
                 {we.sets && we.sets.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-400 dark:text-slate-400 px-2">
+                    <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2">
                       <div className="col-span-2">Set</div>
                       <div className="col-span-4 text-center">Weight</div>
                       <div className="col-span-3 text-center">Reps</div>
@@ -512,19 +586,19 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           key={s.id}
                           className={`grid grid-cols-12 items-center p-2 rounded-2xl text-sm transition-all ${
                             isCompleted
-                              ? 'bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+                              ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
                               : s.is_warmup
-                              ? 'bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200'
-                              : 'bg-slate-950/70 border border-slate-800 text-white'
+                              ? 'bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-950 dark:text-amber-100'
+                              : 'bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'
                           }`}
                         >
                           {/* Set number */}
                           <div className="col-span-2 flex items-center gap-1 font-mono font-semibold">
-                            <span className={isCompleted ? 'text-emerald-400' : 'text-slate-300'}>
+                            <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}>
                               #{s.set_number}
                             </span>
                             {s.is_warmup ? (
-                              <span className="text-[10px] px-1 bg-amber-500 text-slate-950 font-bold rounded">
+                              <span className="text-[10px] px-1 bg-amber-200 dark:bg-amber-500 text-amber-900 dark:text-slate-950 font-bold rounded">
                                 W
                               </span>
                             ) : null}
@@ -539,13 +613,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   step="0.5"
                                   value={s.weight ?? ''}
                                   onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
-                                  className="w-14 bg-slate-900 border border-slate-700 text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                  className="w-14 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
                                 />
-                                <span className="text-[11px] text-slate-400 font-sans">kg</span>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
                               </div>
                             ) : (
                               <span>
-                                {s.weight} <span className="text-[11px] text-slate-400 font-sans">kg</span>
+                                {s.weight} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
                               </span>
                             )}
                           </div>
@@ -559,13 +633,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   min="1"
                                   value={s.reps ?? ''}
                                   onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
-                                  className="w-12 bg-slate-900 border border-slate-700 text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                  className="w-12 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
                                 />
-                                <span className="text-[11px] text-slate-400 font-sans">reps</span>
+                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
                               </div>
                             ) : (
                               <span>
-                                {s.reps} <span className="text-[11px] text-slate-400 font-sans">reps</span>
+                                {s.reps} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
                               </span>
                             )}
                           </div>
@@ -576,8 +650,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                               onClick={() => handleToggleSetComplete(s)}
                               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                                 isCompleted
-                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30'
-                                  : 'border-2 border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-500 hover:text-emerald-400'
+                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
+                                  : 'border-2 border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
                               }`}
                               title={isCompleted ? 'Mark incomplete' : 'Complete set'}
                             >
@@ -585,7 +659,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                             </button>
                             <button
                               onClick={() => handleDeleteSet(s.id)}
-                              className="p-1.5 text-slate-500 hover:text-red-400 rounded-lg active:scale-90 transition-transform"
+                              className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
                               title="Delete set"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -600,7 +674,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                       <button
                         type="button"
                         onClick={() => handleQuickAddSet(we)}
-                        className="w-full py-2 bg-slate-950/60 hover:bg-slate-800/80 border border-dashed border-slate-800 rounded-xl text-xs font-semibold text-slate-400 hover:text-blue-400 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                        className="w-full py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
                       >
                         <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                         Add Set
@@ -611,11 +685,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
                 {/* Inline Set Edit Modal / Drawer if editing */}
                 {editingSet && we.sets.some((s) => s.id === editingSet.id) && (
-                  <div className="p-3 bg-blue-950/30 border border-blue-800/60 rounded-2xl space-y-2">
-                    <div className="text-xs font-bold text-blue-400">Edit Set</div>
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-2xl space-y-2">
+                    <div className="text-xs font-bold text-blue-600 dark:text-blue-400">Edit Set</div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Weight (KG)</label>
+                        <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
                         <input
                           type="number"
                           step="0.5"
@@ -624,11 +698,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           onChange={(e) =>
                             setEditingSet((prev) => ({ ...prev, weight: e.target.value }))
                           }
-                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl p-2 text-sm font-mono font-bold"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase">Reps</label>
+                        <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
                         <input
                           type="number"
                           inputMode="numeric"
@@ -636,32 +710,32 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           onChange={(e) =>
                             setEditingSet((prev) => ({ ...prev, reps: e.target.value }))
                           }
-                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl p-2 text-sm font-mono font-bold"
+                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
                         />
                       </div>
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer">
+                      <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={editingSet.is_warmup}
                           onChange={(e) =>
                             setEditingSet((prev) => ({ ...prev, is_warmup: e.target.checked }))
                           }
-                          className="rounded bg-slate-800 border-slate-700 text-blue-600"
+                          className="rounded bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-blue-600"
                         />
                         Warmup set
                       </label>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setEditingSet(null)}
-                          className="px-3 py-1 bg-slate-800 text-slate-400 text-xs font-bold rounded-lg"
+                          className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-lg"
                         >
                           Cancel
                         </button>
                         <button
                           onClick={handleSaveEditSet}
-                          className="px-3 py-1 bg-blue-600 text-white text-xs font-bold rounded-lg"
+                          className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm"
                         >
                           Save
                         </button>
@@ -671,12 +745,12 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 )}
 
                 {/* FAST SET ENTRY FORM (The Ergonomic Core) */}
-                <div className="pt-2 border-t border-slate-800/80 space-y-2.5">
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
                   <div className="grid grid-cols-2 gap-2.5">
                     {/* Weight Input */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Weight (KG)</label>
+                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
                       </div>
                       <input
                         type="number"
@@ -684,21 +758,21 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                         inputMode="decimal"
                         value={currentInput.weight}
                         onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-xl font-mono font-black text-center focus:outline-none focus:border-blue-500"
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-3 text-xl font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
                       />
                     </div>
 
                     {/* Reps Input */}
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-slate-400 uppercase">Reps</label>
+                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
                       </div>
                       <input
                         type="number"
                         inputMode="numeric"
                         value={currentInput.reps}
                         onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
-                        className="w-full bg-slate-950 border border-slate-700 text-white rounded-xl p-3 text-xl font-mono font-black text-center focus:outline-none focus:border-blue-500"
+                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-3 text-xl font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
                       />
                     </div>
                   </div>
@@ -708,10 +782,10 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                     <button
                       type="button"
                       onClick={() => updateInputState(we.id, 'is_warmup', !currentInput.is_warmup)}
-                      className={`px-3 py-3 rounded-xl border text-xs font-bold transition-all active:scale-95 ${
+                      className={`px-3 py-3 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
                         currentInput.is_warmup
-                          ? 'bg-amber-500 border-amber-400 text-slate-950'
-                          : 'bg-slate-800/80 border-slate-700 text-slate-400'
+                          ? 'bg-amber-100 dark:bg-amber-500 border-amber-300 dark:border-amber-400 text-amber-900 dark:text-slate-950 font-bold'
+                          : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
                       }`}
                       title="Mark as warm-up set"
                     >
@@ -719,9 +793,9 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                     </button>
                     <button
                       onClick={() => handleLogSet(we)}
-                      className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-sm uppercase tracking-wider rounded-xl shadow-lg shadow-blue-600/30 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                      className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                     >
-                      <Plus className="w-5 h-5 stroke-[3]" />
+                      <Plus className="w-5 h-5 stroke-[2.5]" />
                       Log Set
                     </button>
                   </div>
@@ -735,55 +809,62 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         {workout.exercises && workout.exercises.length > 0 && (
           <button
             onClick={() => setShowExerciseModal(true)}
-            className="w-full py-4 rounded-3xl border-2 border-dashed border-slate-800 hover:border-slate-700 text-slate-400 hover:text-white font-bold text-sm flex items-center justify-center gap-2 active:bg-slate-900 transition-all"
+            className="w-full py-3.5 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold text-sm flex items-center justify-center gap-2 active:bg-slate-100 dark:active:bg-slate-900 transition-all shadow-xs"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             Add Another Exercise
           </button>
         )}
       </div>
 
-      {/* Exercise Selector Modal */}
+      {/* Exercise Selector Modal (Add Exercise) */}
       <ExerciseSelectorModal
         isOpen={showExerciseModal}
         onClose={() => setShowExerciseModal(false)}
         onSelect={handleAddExercise}
       />
 
+      {/* Exercise Swap / Replacement Modal */}
+      <ExerciseSelectorModal
+        isOpen={Boolean(replacingExercise)}
+        onClose={() => setReplacingExercise(null)}
+        onSelect={handleSwapExercise}
+      />
+
       {/* Finish Workout Confirmation Modal */}
       {showFinishModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-600/20 text-emerald-400 flex items-center justify-center">
-                <Check className="w-6 h-6 stroke-[3]" />
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                <Check className="w-6 h-6 stroke-[2.5]" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">Finish Workout?</h3>
-                <p className="text-xs text-slate-400 flex items-center gap-1">Duration: <WorkoutDuration startedAt={workout.started_at} /></p>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Finish Workout?</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">Duration: <WorkoutDuration startedAt={workout.started_at} /></p>
               </div>
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-slate-400 mb-1 block">Workout Notes (optional)</label>
+              <label className="text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1 block">Workout Notes (optional)</label>
               <textarea
                 value={workoutNotes}
                 onChange={(e) => setWorkoutNotes(e.target.value)}
-                placeholder="Great chest session, hit a new PR..."
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-blue-500 h-20 placeholder-slate-600"
+                placeholder="Great session, felt strong today..."
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-blue-500 h-20 placeholder-slate-400"
               />
             </div>
 
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFinishModal(false)}
-                className="flex-1 py-3 bg-slate-800 text-slate-300 text-sm font-bold rounded-xl active:bg-slate-700"
+                className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-sm font-semibold rounded-xl active:bg-slate-200 dark:active:bg-slate-700 transition-colors"
               >
                 Continue Workout
               </button>
               <button
                 onClick={confirmFinish}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-black rounded-xl shadow-lg shadow-emerald-600/30 active:scale-95 transition-all"
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl shadow-sm active:scale-95 transition-all"
               >
                 Yes, Finish!
               </button>

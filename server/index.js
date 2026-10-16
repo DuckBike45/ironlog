@@ -795,6 +795,50 @@ app.post('/api/workouts/:id/exercises', async (req, res) => {
   }
 });
 
+// Replace / swap an exercise in a workout (preserving all sets)
+app.put('/api/workout-exercises/:id', async (req, res) => {
+  try {
+    const workoutExerciseId = parseInt(req.params.id, 10);
+    const { exercise_id } = req.body;
+
+    if (!exercise_id) {
+      return res.status(400).json({ error: 'exercise_id is required' });
+    }
+
+    const weRes = await db.execute({
+      sql: 'SELECT workout_id FROM workout_exercises WHERE id = ?',
+      args: [workoutExerciseId],
+    });
+
+    if (weRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Workout exercise not found' });
+    }
+
+    const workoutId = weRes.rows[0].workout_id;
+
+    // Verify target exercise exists
+    const exCheck = await db.execute({
+      sql: 'SELECT id FROM exercises WHERE id = ?',
+      args: [parseInt(exercise_id, 10)],
+    });
+
+    if (exCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Replacement exercise not found' });
+    }
+
+    await db.execute({
+      sql: 'UPDATE workout_exercises SET exercise_id = ? WHERE id = ?',
+      args: [parseInt(exercise_id, 10), workoutExerciseId],
+    });
+
+    const fullWorkout = await getFullWorkoutDetails(workoutId);
+    res.json(fullWorkout);
+  } catch (err) {
+    console.error('Error replacing workout exercise:', err);
+    res.status(500).json({ error: 'Failed to replace exercise' });
+  }
+});
+
 // Remove an exercise from a workout
 app.delete('/api/workout-exercises/:id', async (req, res) => {
   try {

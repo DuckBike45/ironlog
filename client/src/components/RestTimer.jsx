@@ -1,59 +1,153 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Pause, RotateCcw, Clock, BellRing } from 'lucide-react';
+
+function playChime() {
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    // Two-tone high chime: 880Hz (A5) -> 1046Hz (C6)
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.setValueAtTime(1046, ctx.currentTime + 0.15);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (_) {}
+}
+
+function triggerHaptic() {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      navigator.vibrate([200, 100, 200, 100, 300]);
+    } catch (_) {}
+  }
+}
 
 export default function RestTimer() {
   const DEFAULT_SECONDS = 120; // 2:00 minutes
   const [timeLeft, setTimeLeft] = useState(DEFAULT_SECONDS);
   const [isRunning, setIsRunning] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  const targetEndTimeRef = useRef(null);
+
+  // Sync remaining time using actual wall-clock time
+  const updateTimerDelta = () => {
+    if (!targetEndTimeRef.current || !isRunning) return;
+    const now = Date.now();
+    const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - now) / 1000));
+    setTimeLeft(remaining);
+
+    if (remaining <= 0) {
+      targetEndTimeRef.current = null;
+      setIsRunning(false);
+      setIsFinished(true);
+      playChime();
+      triggerHaptic();
+      try {
+        localStorage.removeItem('ironlog_rest_target_end');
+      } catch (_) {}
+    }
+  };
 
   useEffect(() => {
     let interval = null;
-    if (isRunning && timeLeft > 0) {
-      interval = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            setIsRunning(false);
-            setIsFinished(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (isRunning) {
+      interval = setInterval(updateTimerDelta, 500);
     }
     return () => clearInterval(interval);
-  }, [isRunning, timeLeft]);
+  }, [isRunning]);
+
+  // Instantly re-check time whenever the screen unlocks, phone wakes up, or user focuses window
+  useEffect(() => {
+    const handleWake = () => {
+      if (isRunning && targetEndTimeRef.current) {
+        updateTimerDelta();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleWake);
+    window.addEventListener('focus', handleWake);
+    window.addEventListener('pageshow', handleWake);
+    return () => {
+      document.removeEventListener('visibilitychange', handleWake);
+      window.removeEventListener('focus', handleWake);
+      window.removeEventListener('pageshow', handleWake);
+    };
+  }, [isRunning]);
 
   // Listen to external set completion event
   useEffect(() => {
     const handleStartRest = () => {
+      const now = Date.now();
+      const endTime = now + DEFAULT_SECONDS * 1000;
+      targetEndTimeRef.current = endTime;
       setTimeLeft(DEFAULT_SECONDS);
       setIsFinished(false);
       setIsRunning(true);
+      try {
+        localStorage.setItem('ironlog_rest_target_end', String(endTime));
+      } catch (_) {}
     };
     window.addEventListener('ironlog:start-rest', handleStartRest);
     return () => window.removeEventListener('ironlog:start-rest', handleStartRest);
   }, []);
 
   const startTimer = () => {
+    const now = Date.now();
+    const endTime = now + DEFAULT_SECONDS * 1000;
+    targetEndTimeRef.current = endTime;
     setTimeLeft(DEFAULT_SECONDS);
     setIsFinished(false);
     setIsRunning(true);
+    try {
+      localStorage.setItem('ironlog_rest_target_end', String(endTime));
+    } catch (_) {}
   };
 
   const togglePause = () => {
-    setIsRunning(!isRunning);
+    if (isRunning) {
+      // Pause: clear end time, keep current timeLeft
+      targetEndTimeRef.current = null;
+      setIsRunning(false);
+      try {
+        localStorage.removeItem('ironlog_rest_target_end');
+      } catch (_) {}
+    } else {
+      // Resume from current timeLeft
+      const secondsToRun = timeLeft > 0 ? timeLeft : DEFAULT_SECONDS;
+      const endTime = Date.now() + secondsToRun * 1000;
+      targetEndTimeRef.current = endTime;
+      setIsRunning(true);
+      setIsFinished(false);
+      try {
+        localStorage.setItem('ironlog_rest_target_end', String(endTime));
+      } catch (_) {}
+    }
   };
 
   const resetTimer = () => {
+    targetEndTimeRef.current = null;
     setIsRunning(false);
     setIsFinished(false);
     setTimeLeft(DEFAULT_SECONDS);
+    try {
+      localStorage.removeItem('ironlog_rest_target_end');
+    } catch (_) {}
   };
 
   const dismissAlert = () => {
+    targetEndTimeRef.current = null;
     setIsFinished(false);
     setTimeLeft(DEFAULT_SECONDS);
+    try {
+      localStorage.removeItem('ironlog_rest_target_end');
+    } catch (_) {}
   };
 
   const formatTime = (secs) => {
