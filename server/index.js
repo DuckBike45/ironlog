@@ -616,7 +616,7 @@ app.post('/api/workouts/start', async (req, res) => {
     const defaultName = name.trim() || `Workout - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const nowIso = new Date().toISOString();
     const result = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, ?, ?)',
+      sql: 'INSERT INTO workouts (name, started_at, user_id, template_id, has_structured_sets) VALUES (?, ?, ?, NULL, 0)',
       args: [defaultName, nowIso, userId || null],
     });
 
@@ -869,10 +869,31 @@ app.delete('/api/workout-exercises/:id', async (req, res) => {
 app.post('/api/workout-exercises/:id/sets', async (req, res) => {
   try {
     const workoutExerciseId = parseInt(req.params.id, 10);
-    const { weight, reps, is_warmup = 0, notes = null } = req.body;
+    const { weight, reps, is_warmup = 0, notes = null, completed_at } = req.body;
 
     if (weight === undefined || reps === undefined) {
       return res.status(400).json({ error: 'Weight and reps are required' });
+    }
+
+    const weRes = await db.execute({
+      sql: 'SELECT we.workout_id, w.has_structured_sets FROM workout_exercises we JOIN workouts w ON we.workout_id = w.id WHERE we.id = ?',
+      args: [workoutExerciseId],
+    });
+
+    if (weRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Workout exercise not found' });
+    }
+
+    const workoutId = weRes.rows[0].workout_id;
+    const isStructured = Number(weRes.rows[0].has_structured_sets) === 1;
+
+    let finalCompletedAt;
+    if (completed_at !== undefined) {
+      finalCompletedAt = completed_at;
+    } else if (isStructured) {
+      finalCompletedAt = null;
+    } else {
+      finalCompletedAt = new Date().toISOString();
     }
 
     const maxSetRes = await db.execute({
@@ -882,8 +903,8 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
     const nextSetNumber = (maxSetRes.rows.length ? Number(maxSetRes.rows[0].max_set) : 0) + 1;
 
     const insertRes = await db.execute({
-      sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, notes) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [workoutExerciseId, nextSetNumber, parseFloat(weight), parseInt(reps, 10), is_warmup ? 1 : 0, notes ? notes.trim() : null],
+      sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, notes, completed_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      args: [workoutExerciseId, nextSetNumber, parseFloat(weight), parseInt(reps, 10), is_warmup ? 1 : 0, notes ? notes.trim() : null, finalCompletedAt],
     });
 
     const newSetRes = await db.execute({
@@ -891,12 +912,7 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
       args: [Number(insertRes.lastInsertRowid)],
     });
 
-    const weRes = await db.execute({
-      sql: 'SELECT workout_id FROM workout_exercises WHERE id = ?',
-      args: [workoutExerciseId],
-    });
-
-    const workout = await getFullWorkoutDetails(weRes.rows[0].workout_id);
+    const workout = await getFullWorkoutDetails(workoutId);
 
     res.status(201).json({
       set: newSetRes.rows[0],
@@ -1312,16 +1328,34 @@ app.post('/api/templates/:id/start', async (req, res) => {
 
     const template = tplRes.rows[0];
     const nowIso = new Date().toISOString();
-    const workoutRes = await db.execute({
-      sql: 'INSERT INTO workouts (name, started_at, user_id) VALUES (?, ?, ?)',
-      args: [template.name, nowIso, userId || null],
-    });
-    const workoutId = Number(workoutRes.lastInsertRowid);
 
     const teRes = await db.execute({
       sql: 'SELECT exercise_id, order_index, target_sets, target_reps, target_weight, sets_json FROM template_exercises WHERE template_id = ? ORDER BY order_index ASC',
       args: [templateId],
     });
+
+    let totalTargetSets = 0;
+    for (const te of teRes.rows) {
+      let plannedSets = [];
+      if (te.sets_json) {
+        try {
+          plannedSets = typeof te.sets_json === 'string' ? JSON.parse(te.sets_json) : te.sets_json;
+        } catch (_) {}
+      }
+      if (Array.isArray(plannedSets) && plannedSets.length > 0) {
+        totalTargetSets += plannedSets.length;
+      } else {
+        totalTargetSets += (parseInt(te.target_sets, 10) || 0);
+      }
+    }
+
+    const hasStructuredSets = totalTargetSets > 0 ? 1 : 0;
+
+    const workoutRes = await db.execute({
+      sql: 'INSERT INTO workouts (name, started_at, user_id, template_id, has_structured_sets) VALUES (?, ?, ?, ?, ?)',
+      args: [template.name, nowIso, userId || null, templateId, hasStructuredSets],
+    });
+    const workoutId = Number(workoutRes.lastInsertRowid);
 
     for (const te of teRes.rows) {
       const weResult = await db.execute({

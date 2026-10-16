@@ -48,6 +48,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   const [historyModalExercise, setHistoryModalExercise] = useState(null);
   const [replacingExercise, setReplacingExercise] = useState(null);
 
+  // Structured workouts have pre-configured target sets from a template.
+  // Blank / ad-hoc workouts auto-complete sets immediately without requiring or showing a checkmark.
+  const hasStructuredSets = Boolean(
+    workout.has_structured_sets === 1 ||
+    workout.has_structured_sets === true ||
+    (workout.template_id && workout.has_structured_sets === undefined && workout.exercises?.some((e) => e.sets?.some((s) => !s.completed_at)))
+  );
+
   // Screen Wake Lock: keeps display awake during active workouts
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const wakeLockRef = useRef(null);
@@ -473,6 +481,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
     const nextSetNumber = existingSets.length + 1;
     const optimisticSetId = 'temp_' + Date.now();
+    const setCompletedAt = hasStructuredSets ? null : new Date().toISOString();
+
     const optimisticSet = {
       id: optimisticSetId,
       workout_exercise_id: we.id,
@@ -480,7 +490,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       weight: defaultWeight,
       reps: defaultReps,
       is_warmup: 0,
-      completed_at: null,
+      completed_at: setCompletedAt,
       notes: null,
     };
 
@@ -500,11 +510,17 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
     onWorkoutUpdated(optimisticWorkout);
 
+    // If ad-hoc / free workout, auto-completing the set immediately starts the rest timer
+    if (!hasStructuredSets) {
+      window.dispatchEvent(new CustomEvent('ironlog:start-rest'));
+    }
+
     try {
       const response = await api.addSet(we.id, {
         weight: defaultWeight,
         reps: defaultReps,
         is_warmup: 0,
+        completed_at: setCompletedAt,
       });
       onWorkoutUpdated(response.workout);
     } catch (err) {
@@ -718,12 +734,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                       {totalSets > 0 && (
                         <span
                           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            completedSets === totalSets
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                              : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                            hasStructuredSets
+                              ? (completedSets === totalSets
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800')
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
                           }`}
                         >
-                          {completedSets}/{totalSets} sets
+                          {hasStructuredSets ? `${completedSets}/${totalSets} sets` : `${totalSets} ${totalSets === 1 ? 'set' : 'sets'}`}
                         </span>
                       )}
                     </div>
@@ -776,7 +794,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           <div className="w-16 shrink-0 text-center">Weight</div>
                           <div className="w-12 shrink-0 text-center">Reps</div>
                           <div className="flex-1 min-w-[70px] pl-1">Comment</div>
-                          <div className="w-12 shrink-0 text-right pr-0.5">Done</div>
+                          {hasStructuredSets ? (
+                            <div className="w-12 shrink-0 text-right pr-0.5">Done</div>
+                          ) : (
+                            <div className="w-6 shrink-0 text-right pr-0.5"></div>
+                          )}
                         </div>
 
                         {we.sets.map((s) => {
@@ -786,7 +808,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                             <div
                               key={s.id}
                               className={`flex items-center gap-1.5 p-1.5 rounded-2xl transition-all ${
-                                isCompleted
+                                hasStructuredSets && isCompleted
                                   ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
                                   : s.is_warmup
                                   ? 'bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-950 dark:text-amber-100'
@@ -800,7 +822,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 className="w-7 shrink-0 flex items-center justify-center gap-0.5 font-mono font-semibold text-xs active:scale-95 transition-transform"
                                 title={s.is_warmup ? 'Warmup set (tap to make working set)' : 'Working set (tap to make warmup)'}
                               >
-                                <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
+                                <span className={hasStructuredSets && isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
                                   #{s.set_number}
                                 </span>
                                 {s.is_warmup ? (
@@ -820,7 +842,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
                                   onBlur={(e) => handleBlurSet(s, 'weight', e.target.value)}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
-                                    isCompleted
+                                    hasStructuredSets && isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
                                       : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
                                   }`}
@@ -837,14 +859,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
                                   onBlur={(e) => handleBlurSet(s, 'reps', e.target.value)}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
-                                    isCompleted
+                                    hasStructuredSets && isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
                                       : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
                                   }`}
                                 />
                               </div>
 
-                              {/* Comment Field (Ultra-compact 10px font and 9px placeholder) */}
+                              {/* Comment Field (Ultra-compact 10px font, expands into reclaimed horizontal space) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
@@ -862,36 +884,49 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                     }
                                   }}
                                   className={`w-full rounded-lg py-1 px-1.5 text-[10px] text-slate-900 dark:text-white placeholder:text-[9px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
-                                    isCompleted
+                                    hasStructuredSets && isCompleted
                                       ? 'bg-white/50 dark:bg-slate-900/30 border border-emerald-200/60 dark:border-emerald-700/40'
                                       : 'bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 hover:bg-white dark:hover:bg-slate-900'
                                   }`}
                                 />
                               </div>
 
-                              {/* Actions: Compact Checkmark & Delete */}
-                              <div className="w-12 shrink-0 flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleSetComplete(s)}
-                                  className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all active:scale-90 ${
-                                    isCompleted
-                                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                                      : 'border border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
-                                  }`}
-                                  title={isCompleted ? 'Mark incomplete' : 'Complete set'}
-                                >
-                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteSet(s.id)}
-                                  className="p-1 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
-                                  title="Delete set"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                              {/* Actions: Compact Checkmark & Delete (Structured) or Delete Only (Free) */}
+                              {hasStructuredSets ? (
+                                <div className="w-12 shrink-0 flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleSetComplete(s)}
+                                    className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                                      isCompleted
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                        : 'border border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
+                                    }`}
+                                    title={isCompleted ? 'Mark incomplete' : 'Complete set'}
+                                  >
+                                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSet(s.id)}
+                                    className="p-1 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
+                                    title="Delete set"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="w-6 shrink-0 flex items-center justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSet(s.id)}
+                                    className="p-1 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
+                                    title="Delete set"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}

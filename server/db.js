@@ -198,6 +198,8 @@ async function initDb() {
         CREATE TABLE IF NOT EXISTS workouts (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+          template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL,
+          has_structured_sets INTEGER DEFAULT 0,
           name TEXT,
           started_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
           completed_at DATETIME,
@@ -205,12 +207,16 @@ async function initDb() {
         );
       `);
 
-      // Safely ensure user_id column exists for existing tables
+      // Safely ensure columns exist for existing tables
       try {
         await db.execute('ALTER TABLE workouts ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE CASCADE');
-      } catch (_) {
-        // column already exists
-      }
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE workouts ADD COLUMN template_id INTEGER REFERENCES templates(id) ON DELETE SET NULL');
+      } catch (_) {}
+      try {
+        await db.execute('ALTER TABLE workouts ADD COLUMN has_structured_sets INTEGER DEFAULT 0');
+      } catch (_) {}
 
       // 4. Workout exercises
       await db.execute(`
