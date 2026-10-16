@@ -434,10 +434,10 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
-  const toggleExerciseCollapse = (workoutExerciseId) => {
+  const toggleExerciseCollapse = (workoutExerciseId, currentCollapsedState) => {
     setCollapsedExercises((prev) => ({
       ...prev,
-      [workoutExerciseId]: !prev[workoutExerciseId],
+      [workoutExerciseId]: !currentCollapsedState,
     }));
   };
 
@@ -553,10 +553,10 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
             </button>
           </div>
         ) : (
-          workout.exercises.map((we) => {
+          workout.exercises.map((we, idx) => {
             const currentInput = getInputState(we);
             const perf = lastPerformances[we.exercise_id];
-            const isCollapsed = !!collapsedExercises[we.id];
+            const isCollapsed = collapsedExercises[we.id] !== undefined ? collapsedExercises[we.id] : idx > 0;
             const totalSets = we.sets ? we.sets.length : 0;
             const completedSets = we.sets ? we.sets.filter((s) => !!s.completed_at).length : 0;
 
@@ -569,7 +569,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 <div className="flex items-start justify-between gap-2">
                   <div
                     className="flex-1 cursor-pointer select-none"
-                    onClick={() => toggleExerciseCollapse(we.id)}
+                    onClick={() => toggleExerciseCollapse(we.id, isCollapsed)}
                   >
                     <div className="flex items-center gap-1.5">
                       <h3 className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -662,7 +662,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           <div className="w-16 shrink-0 text-center">Weight</div>
                           <div className="w-12 shrink-0 text-center">Reps</div>
                           <div className="flex-1 min-w-[70px] pl-1">Comment</div>
-                          <div className="w-14 shrink-0 text-right pr-1">Done</div>
+                          <div className="w-12 shrink-0 text-right pr-0.5">Done</div>
                         </div>
 
                         {we.sets.map((s) => {
@@ -723,12 +723,12 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   />
                                 ) : (
                                   <span className="font-mono font-semibold text-xs">
-                                    {s.reps} <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">r</span>
+                                    {s.reps}
                                   </span>
                                 )}
                               </div>
 
-                              {/* Comment Field - Always visible! */}
+                              {/* Comment Field - Always visible with significantly smaller placeholder font */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
@@ -745,22 +745,22 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                       e.target.blur();
                                     }
                                   }}
-                                  className="w-full bg-white/80 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-lg py-1 px-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                                  className="w-full bg-white/80 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-lg py-1 px-2 text-xs text-slate-900 dark:text-white placeholder:text-[9.5px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
                                 />
                               </div>
 
-                              {/* Actions: Complete Checkmark & Delete */}
-                              <div className="w-14 shrink-0 flex items-center justify-end gap-1">
+                              {/* Actions: Significantly smaller checkmark & Delete */}
+                              <div className="w-12 shrink-0 flex items-center justify-end gap-1">
                                 <button
                                   onClick={() => handleToggleSetComplete(s)}
-                                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                                     isCompleted
                                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                                      : 'border-2 border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
+                                      : 'border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
                                   }`}
                                   title={isCompleted ? 'Mark incomplete' : 'Complete set'}
                                 >
-                                  <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  <Check className="w-2.5 h-2.5 stroke-[3]" />
                                 </button>
                                 <button
                                   onClick={() => handleDeleteSet(s.id)}
@@ -840,7 +840,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                     {/* STREAMLINED FAST SET ENTRY FORM (Horizontally condensed in 1 row) */}
                     <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5">
                       {/* Weight Input */}
-                      <div className="relative flex-1 min-w-[70px]">
+                      <div className="relative flex-1 min-w-[65px]">
                         <input
                           type="number"
                           step="0.5"
@@ -848,13 +848,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           value={currentInput.weight}
                           onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
                           placeholder="Weight"
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2 pl-2 pr-6 text-sm font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
+                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-1.5 pl-2 pr-5 text-xs font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
                         />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-sans pointer-events-none">kg</span>
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-sans pointer-events-none">kg</span>
                       </div>
 
                       {/* Reps Input */}
-                      <div className="relative flex-1 min-w-[60px]">
+                      <div className="relative flex-1 min-w-[55px]">
                         <input
                           type="number"
                           min="1"
@@ -862,16 +862,16 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           value={currentInput.reps}
                           onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
                           placeholder="Reps"
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2 pl-2 pr-7 text-sm font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
+                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-1.5 pl-2 pr-5 text-xs font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
                         />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-sans pointer-events-none">reps</span>
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-sans pointer-events-none">reps</span>
                       </div>
 
                       {/* Warmup Checkbox */}
                       <button
                         type="button"
                         onClick={() => updateInputState(we.id, 'is_warmup', !currentInput.is_warmup)}
-                        className={`px-2.5 py-2 rounded-xl border text-xs font-semibold transition-all active:scale-95 shrink-0 ${
+                        className={`px-2 py-1.5 rounded-xl border text-[11px] font-semibold transition-all active:scale-95 shrink-0 ${
                           currentInput.is_warmup
                             ? 'bg-amber-100 dark:bg-amber-500 border-amber-300 dark:border-amber-400 text-amber-900 dark:text-slate-950 font-bold'
                             : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
@@ -881,13 +881,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                         Warmup
                       </button>
 
-                      {/* 1-Tap + Add Set Button */}
+                      {/* 1-Tap + Add Set Button (Condensed horizontally) */}
                       <button
                         type="button"
                         onClick={() => handleLogSet(we)}
-                        className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1 shrink-0"
+                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1 shrink-0"
                       >
-                        <Plus className="w-4 h-4 stroke-[2.5]" />
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
                         <span>Add Set</span>
                       </button>
                     </div>
