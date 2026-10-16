@@ -844,7 +844,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 />
                               </div>
 
-                              {/* Comment Field (Visible with 11px font and 10px placeholder) */}
+                              {/* Comment Field (Ultra-compact 10px font and 9px placeholder) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
@@ -861,7 +861,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                       e.target.blur();
                                     }
                                   }}
-                                  className={`w-full rounded-lg py-1 px-1.5 text-[11px] text-slate-900 dark:text-white placeholder:text-[10px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
+                                  className={`w-full rounded-lg py-1 px-1.5 text-[10px] text-slate-900 dark:text-white placeholder:text-[9px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
                                     isCompleted
                                       ? 'bg-white/50 dark:bg-slate-900/30 border border-emerald-200/60 dark:border-emerald-700/40'
                                       : 'bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 hover:bg-white dark:hover:bg-slate-900'
