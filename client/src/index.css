@@ -34,7 +34,7 @@ input, select, textarea {
 
 /* iOS Safe Area Utilities for Home Screen PWA */
 .safe-top {
-  padding-top: max(12px, env(safe-area-inset-top));
+  padding-top: max(20px, env(safe-area-inset-top));
 }
 
 .safe-top-sticky {
