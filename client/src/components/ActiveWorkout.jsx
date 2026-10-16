@@ -368,17 +368,90 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
-  const handleQuickAddSet = async (we) => {
-    const sets = we.sets || [];
-    const lastSet = sets[sets.length - 1];
-    const weight = lastSet ? lastSet.weight : 60;
-    const reps = lastSet ? lastSet.reps : 10;
-    const is_warmup = 0;
+  const handleToggleWarmup = async (set) => {
+    const newWarmup = set.is_warmup ? 0 : 1;
+    const previousWorkout = workout;
+
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === set.id) {
+            return { ...s, is_warmup: newWarmup };
+          }
+          return s;
+        }),
+      })),
+    };
+    onWorkoutUpdated(optimisticWorkout);
 
     try {
-      const response = await api.addSet(we.id, { weight, reps, is_warmup });
+      const response = await api.updateSet(set.id, {
+        is_warmup: newWarmup,
+      });
       onWorkoutUpdated(response.workout);
     } catch (err) {
+      onWorkoutUpdated(previousWorkout);
+      alert(err.message || 'Failed to toggle warmup');
+    }
+  };
+
+  const handleAddDirectSet = async (we) => {
+    const existingSets = we.sets || [];
+    let defaultWeight = 60;
+    let defaultReps = 10;
+
+    if (existingSets.length > 0) {
+      const lastSet = existingSets[existingSets.length - 1];
+      defaultWeight = lastSet.weight != null ? lastSet.weight : 60;
+      defaultReps = lastSet.reps != null ? lastSet.reps : 10;
+    } else {
+      const perf = lastPerformances[we.exercise_id];
+      if (perf && perf.found && perf.sets && perf.sets.length > 0) {
+        defaultWeight = perf.sets[0].weight;
+        defaultReps = perf.sets[0].reps;
+      }
+    }
+
+    const nextSetNumber = existingSets.length + 1;
+    const optimisticSetId = 'temp_' + Date.now();
+    const optimisticSet = {
+      id: optimisticSetId,
+      workout_exercise_id: we.id,
+      set_number: nextSetNumber,
+      weight: defaultWeight,
+      reps: defaultReps,
+      is_warmup: 0,
+      completed_at: null,
+      notes: null,
+    };
+
+    const previousWorkout = workout;
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => {
+        if (e.id === we.id) {
+          return {
+            ...e,
+            sets: [...(e.sets || []), optimisticSet],
+          };
+        }
+        return e;
+      }),
+    };
+
+    onWorkoutUpdated(optimisticWorkout);
+
+    try {
+      const response = await api.addSet(we.id, {
+        weight: defaultWeight,
+        reps: defaultReps,
+        is_warmup: 0,
+      });
+      onWorkoutUpdated(response.workout);
+    } catch (err) {
+      onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to add set');
     }
   };
@@ -638,22 +711,6 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 {/* Collapsible Exercise Body */}
                 {!isCollapsed && (
                   <>
-                    {/* Previous Performance Context Pill */}
-                    {perf && perf.found && (
-                      <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl flex items-start gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                        <div className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
-                          <span className="text-blue-600 dark:text-blue-400 font-semibold">Last Session: </span>
-                          {perf.sets.map((s, idx) => (
-                            <span key={s.id} className="font-mono font-medium">
-                              {s.weight}kg × {s.reps}
-                              {idx < perf.sets.length - 1 ? '  •  ' : ''}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Sets Table */}
                     {we.sets && we.sets.length > 0 && (
                       <div className="space-y-1.5 pt-1">
@@ -671,7 +728,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           return (
                             <div
                               key={s.id}
-                              className={`flex items-center gap-1.5 p-1.5 rounded-2xl text-sm transition-all ${
+                              className={`flex items-center gap-1.5 p-1.5 rounded-2xl transition-all ${
                                 isCompleted
                                   ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
                                   : s.is_warmup
@@ -679,9 +736,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                   : 'bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'
                               }`}
                             >
-                              {/* Set number & Warmup indicator */}
-                              <div className="w-7 shrink-0 flex items-center justify-center gap-0.5 font-mono font-semibold text-xs">
-                                <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}>
+                              {/* Set number & Warmup toggle (1-tap) */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleWarmup(s)}
+                                className="w-7 shrink-0 flex items-center justify-center gap-0.5 font-mono font-semibold text-xs active:scale-95 transition-transform"
+                                title={s.is_warmup ? 'Warmup set (tap to make working set)' : 'Working set (tap to make warmup)'}
+                              >
+                                <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
                                   #{s.set_number}
                                 </span>
                                 {s.is_warmup ? (
@@ -689,46 +751,39 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                     W
                                   </span>
                                 ) : null}
-                              </div>
+                              </button>
 
-                              {/* Weight */}
+                              {/* Weight Input (Direct in set, increased font) */}
                               <div className="w-16 shrink-0 text-center">
-                                {!isCompleted ? (
-                                  <div className="relative">
-                                    <input
-                                      type="number"
-                                      step="0.5"
-                                      value={s.weight ?? ''}
-                                      onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
-                                      className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 pl-1 pr-3 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
-                                    />
-                                    <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-sans pointer-events-none">k</span>
-                                  </div>
-                                ) : (
-                                  <span className="font-mono font-semibold text-xs">
-                                    {s.weight} <span className="text-[10px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
-                                  </span>
-                                )}
+                                <input
+                                  type="number"
+                                  step="0.5"
+                                  value={s.weight ?? ''}
+                                  onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
+                                  className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
+                                    isCompleted
+                                      ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
+                                      : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
+                                  }`}
+                                />
                               </div>
 
-                              {/* Reps */}
+                              {/* Reps Input (Direct in set, increased font, no 'r') */}
                               <div className="w-12 shrink-0 text-center">
-                                {!isCompleted ? (
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    value={s.reps ?? ''}
-                                    onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
-                                    className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
-                                  />
-                                ) : (
-                                  <span className="font-mono font-semibold text-xs">
-                                    {s.reps}
-                                  </span>
-                                )}
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={s.reps ?? ''}
+                                  onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
+                                  className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
+                                    isCompleted
+                                      ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
+                                      : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
+                                  }`}
+                                />
                               </div>
 
-                              {/* Comment Field - Always visible with significantly smaller placeholder font */}
+                              {/* Comment Field (Visible with smaller placeholder font) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
@@ -745,24 +800,30 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                       e.target.blur();
                                     }
                                   }}
-                                  className="w-full bg-white/80 dark:bg-slate-900/70 hover:bg-white dark:hover:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-lg py-1 px-2 text-xs text-slate-900 dark:text-white placeholder:text-[9.5px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors"
+                                  className={`w-full rounded-lg py-1 px-2 text-xs text-slate-900 dark:text-white placeholder:text-[9.5px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
+                                    isCompleted
+                                      ? 'bg-white/50 dark:bg-slate-900/30 border border-emerald-200/60 dark:border-emerald-700/40'
+                                      : 'bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 hover:bg-white dark:hover:bg-slate-900'
+                                  }`}
                                 />
                               </div>
 
-                              {/* Actions: Significantly smaller checkmark & Delete */}
+                              {/* Actions: Compact Checkmark & Delete */}
                               <div className="w-12 shrink-0 flex items-center justify-end gap-1">
                                 <button
+                                  type="button"
                                   onClick={() => handleToggleSetComplete(s)}
-                                  className={`w-5 h-5 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                                  className={`w-[18px] h-[18px] rounded-full flex items-center justify-center transition-all active:scale-90 ${
                                     isCompleted
                                       ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                                      : 'border border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
+                                      : 'border border-slate-300 dark:border-slate-600 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
                                   }`}
                                   title={isCompleted ? 'Mark incomplete' : 'Complete set'}
                                 >
                                   <Check className="w-2.5 h-2.5 stroke-[3]" />
                                 </button>
                                 <button
+                                  type="button"
                                   onClick={() => handleDeleteSet(s.id)}
                                   className="p-1 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
                                   title="Delete set"
@@ -776,118 +837,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                       </div>
                     )}
 
-                    {/* Inline Set Edit Modal / Drawer if editing */}
-                    {editingSet && we.sets.some((s) => s.id === editingSet.id) && (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-2xl space-y-2">
-                        <div className="text-xs font-bold text-blue-600 dark:text-blue-400">Edit Set</div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
-                            <input
-                              type="number"
-                              step="0.5"
-                              inputMode="decimal"
-                              value={editingSet.weight}
-                              onChange={(e) =>
-                                setEditingSet((prev) => ({ ...prev, weight: e.target.value }))
-                              }
-                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
-                            <input
-                              type="number"
-                              inputMode="numeric"
-                              value={editingSet.reps}
-                              onChange={(e) =>
-                                setEditingSet((prev) => ({ ...prev, reps: e.target.value }))
-                              }
-                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
-                            />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={editingSet.is_warmup}
-                              onChange={(e) =>
-                                setEditingSet((prev) => ({ ...prev, is_warmup: e.target.checked }))
-                              }
-                              className="rounded bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-blue-600"
-                            />
-                            Warmup set
-                          </label>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => setEditingSet(null)}
-                              className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-lg"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={handleSaveEditSet}
-                              className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* STREAMLINED FAST SET ENTRY FORM (Horizontally condensed in 1 row) */}
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-1.5">
-                      {/* Weight Input */}
-                      <div className="relative flex-1 min-w-[65px]">
-                        <input
-                          type="number"
-                          step="0.5"
-                          inputMode="decimal"
-                          value={currentInput.weight}
-                          onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
-                          placeholder="Weight"
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-1.5 pl-2 pr-5 text-xs font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-sans pointer-events-none">kg</span>
-                      </div>
-
-                      {/* Reps Input */}
-                      <div className="relative flex-1 min-w-[55px]">
-                        <input
-                          type="number"
-                          min="1"
-                          inputMode="numeric"
-                          value={currentInput.reps}
-                          onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
-                          placeholder="Reps"
-                          className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-1.5 pl-2 pr-5 text-xs font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
-                        />
-                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-slate-400 font-sans pointer-events-none">reps</span>
-                      </div>
-
-                      {/* Warmup Checkbox */}
+                    {/* Direct + Add Set Button */}
+                    <div className="pt-1">
                       <button
                         type="button"
-                        onClick={() => updateInputState(we.id, 'is_warmup', !currentInput.is_warmup)}
-                        className={`px-2 py-1.5 rounded-xl border text-[11px] font-semibold transition-all active:scale-95 shrink-0 ${
-                          currentInput.is_warmup
-                            ? 'bg-amber-100 dark:bg-amber-500 border-amber-300 dark:border-amber-400 text-amber-900 dark:text-slate-950 font-bold'
-                            : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                        }`}
-                        title="Mark as warm-up set"
+                        onClick={() => handleAddDirectSet(we)}
+                        className="w-full py-1.5 px-3 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl active:scale-[0.99] transition-all flex items-center justify-center gap-1.5 border border-dashed border-slate-300 dark:border-slate-700"
                       >
-                        Warmup
-                      </button>
-
-                      {/* 1-Tap + Add Set Button (Condensed horizontally) */}
-                      <button
-                        type="button"
-                        onClick={() => handleLogSet(we)}
-                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-xs active:scale-95 transition-all flex items-center justify-center gap-1 shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <Plus className="w-3.5 h-3.5 stroke-[2.5] text-blue-600 dark:text-blue-400" />
                         <span>Add Set</span>
                       </button>
                     </div>
