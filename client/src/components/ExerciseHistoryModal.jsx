@@ -110,21 +110,28 @@ export default function ExerciseHistoryModal({ isOpen, onClose, exerciseId, exer
                       {session.sets.map((set) => (
                         <div
                           key={set.id}
-                          className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-900/70 text-xs font-mono border border-slate-100 dark:border-transparent"
+                          className="py-1.5 px-2.5 rounded-lg bg-white dark:bg-slate-900/70 text-xs font-mono border border-slate-100 dark:border-transparent space-y-0.5"
                         >
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500 dark:text-slate-400 font-medium">Set {set.set_number}</span>
-                            {set.is_warmup ? (
-                              <span className="text-[9px] px-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-sans font-bold rounded">
-                                W
-                              </span>
-                            ) : null}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-slate-500 dark:text-slate-400 font-medium">Set {set.set_number}</span>
+                              {set.is_warmup ? (
+                                <span className="text-[9px] px-1 bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 font-sans font-bold rounded">
+                                  W
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="font-semibold text-slate-900 dark:text-white">
+                              <span>{set.weight} kg</span>
+                              <span className="text-slate-400 mx-1.5">×</span>
+                              <span>{set.reps} reps</span>
+                            </div>
                           </div>
-                          <div className="font-semibold text-slate-900 dark:text-white">
-                            <span>{set.weight} kg</span>
-                            <span className="text-slate-400 mx-1.5">×</span>
-                            <span>{set.reps} reps</span>
-                          </div>
+                          {set.notes && (
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-sans italic pl-1 border-l-2 border-blue-400">
+                              "{set.notes}"
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

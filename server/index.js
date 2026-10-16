@@ -473,7 +473,7 @@ app.get('/api/exercises/:id/last-performance', async (req, res) => {
 
     const setsRes = await db.execute({
       sql: `
-        SELECT ws.id, ws.set_number, ws.weight, ws.reps, ws.is_warmup, ws.completed_at
+        SELECT ws.id, ws.set_number, ws.weight, ws.reps, ws.is_warmup, ws.completed_at, ws.notes
         FROM workout_sets ws
         JOIN workout_exercises we ON ws.workout_exercise_id = we.id
         WHERE we.workout_id = ? AND we.exercise_id = ?
@@ -532,7 +532,7 @@ app.get('/api/exercises/:id/history', async (req, res) => {
     for (const s of sessionsRes.rows) {
       const setsRes = await db.execute({
         sql: `
-          SELECT id, set_number, weight, reps, is_warmup, completed_at
+          SELECT id, set_number, weight, reps, is_warmup, completed_at, notes
           FROM workout_sets
           WHERE workout_exercise_id = ?
           ORDER BY set_number ASC
@@ -867,7 +867,7 @@ app.delete('/api/workout-exercises/:id', async (req, res) => {
 app.post('/api/workout-exercises/:id/sets', async (req, res) => {
   try {
     const workoutExerciseId = parseInt(req.params.id, 10);
-    const { weight, reps, is_warmup = 0 } = req.body;
+    const { weight, reps, is_warmup = 0, notes = null } = req.body;
 
     if (weight === undefined || reps === undefined) {
       return res.status(400).json({ error: 'Weight and reps are required' });
@@ -880,8 +880,8 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
     const nextSetNumber = (maxSetRes.rows.length ? Number(maxSetRes.rows[0].max_set) : 0) + 1;
 
     const insertRes = await db.execute({
-      sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup) VALUES (?, ?, ?, ?, ?)',
-      args: [workoutExerciseId, nextSetNumber, parseFloat(weight), parseInt(reps, 10), is_warmup ? 1 : 0],
+      sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, notes) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [workoutExerciseId, nextSetNumber, parseFloat(weight), parseInt(reps, 10), is_warmup ? 1 : 0, notes ? notes.trim() : null],
     });
 
     const newSetRes = await db.execute({
@@ -910,7 +910,7 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
 app.put('/api/sets/:id', async (req, res) => {
   try {
     const setId = parseInt(req.params.id, 10);
-    const { weight, reps, is_warmup, completed_at, is_completed } = req.body;
+    const { weight, reps, is_warmup, completed_at, is_completed, notes } = req.body;
 
     const setRes = await db.execute({ sql: 'SELECT * FROM workout_sets WHERE id = ?', args: [setId] });
     if (setRes.rows.length === 0) {
@@ -921,6 +921,7 @@ app.put('/api/sets/:id', async (req, res) => {
     const updatedWeight = weight !== undefined ? parseFloat(weight) : currentSet.weight;
     const updatedReps = reps !== undefined ? parseInt(reps, 10) : currentSet.reps;
     const updatedWarmup = is_warmup !== undefined ? (is_warmup ? 1 : 0) : currentSet.is_warmup;
+    const updatedNotes = notes !== undefined ? (notes ? notes.trim() : null) : currentSet.notes;
 
     let updatedCompletedAt = currentSet.completed_at;
     if (is_completed !== undefined) {
@@ -930,8 +931,8 @@ app.put('/api/sets/:id', async (req, res) => {
     }
 
     await db.execute({
-      sql: 'UPDATE workout_sets SET weight = ?, reps = ?, is_warmup = ?, completed_at = ? WHERE id = ?',
-      args: [updatedWeight, updatedReps, updatedWarmup, updatedCompletedAt, setId],
+      sql: 'UPDATE workout_sets SET weight = ?, reps = ?, is_warmup = ?, completed_at = ?, notes = ? WHERE id = ?',
+      args: [updatedWeight, updatedReps, updatedWarmup, updatedCompletedAt, updatedNotes, setId],
     });
 
     const weRes = await db.execute({

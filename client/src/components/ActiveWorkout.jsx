@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Check, Trash2, Edit3, X, Dumbbell, History, 
-  ChevronDown, ChevronUp, AlertTriangle, Sparkles, ArrowLeftRight 
+  ChevronDown, ChevronUp, AlertTriangle, Sparkles, ArrowLeftRight, MessageSquare 
 } from 'lucide-react';
 import { api } from '../api';
 import RestTimer from './RestTimer';
@@ -97,6 +97,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   // Active inline editing set: { id, weight, reps, is_warmup } or null
   const [editingSet, setEditingSet] = useState(null);
+
+  // Collapse state for exercises: workoutExerciseId -> boolean (true = collapsed)
+  const [collapsedExercises, setCollapsedExercises] = useState({});
+
+  // Active set note inline edit: setId or null, and draft text
+  const [editingNoteSetId, setEditingNoteSetId] = useState(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
 
   // Load last performance for all exercises in this workout
   useEffect(() => {
@@ -425,6 +432,53 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
+  const toggleExerciseCollapse = (workoutExerciseId) => {
+    setCollapsedExercises((prev) => ({
+      ...prev,
+      [workoutExerciseId]: !prev[workoutExerciseId],
+    }));
+  };
+
+  const handleStartEditNote = (set) => {
+    if (editingNoteSetId === set.id) {
+      setEditingNoteSetId(null);
+      setEditingNoteText('');
+    } else {
+      setEditingNoteSetId(set.id);
+      setEditingNoteText(set.notes || '');
+    }
+  };
+
+  const handleSaveSetNote = async (setId, text) => {
+    const trimmed = text ? text.trim() : null;
+    const previousWorkout = workout;
+
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === setId) {
+            return { ...s, notes: trimmed };
+          }
+          return s;
+        }),
+      })),
+    };
+
+    onWorkoutUpdated(optimisticWorkout);
+    setEditingNoteSetId(null);
+    setEditingNoteText('');
+
+    try {
+      const response = await api.updateSet(setId, { notes: trimmed });
+      onWorkoutUpdated(response.workout);
+    } catch (err) {
+      onWorkoutUpdated(previousWorkout);
+      alert(err.message || 'Failed to save note');
+    }
+  };
+
   const confirmFinish = async () => {
     try {
       await onFinishWorkout(workout.id, workoutNotes);
@@ -473,10 +527,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         </div>
       </div>
 
-      {/* Floating Rest Timer bar (Sticks to top beneath iOS status bar with seamless background coverage) */}
-      <div className="sticky top-0 z-30 shadow-sm bg-white/95 dark:bg-slate-900/95 backdrop-blur-md pt-[env(safe-area-inset-top)]">
-        <RestTimer />
-      </div>
+      {/* Rest Timer (Floating bottom dock above navigation) */}
+      <RestTimer />
 
       <div className="p-4 space-y-4 max-w-lg mx-auto">
 
@@ -502,6 +554,9 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
           workout.exercises.map((we) => {
             const currentInput = getInputState(we);
             const perf = lastPerformances[we.exercise_id];
+            const isCollapsed = !!collapsedExercises[we.id];
+            const totalSets = we.sets ? we.sets.length : 0;
+            const completedSets = we.sets ? we.sets.filter((s) => !!s.completed_at).length : 0;
 
             return (
               <div
@@ -509,14 +564,40 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/90 rounded-3xl p-4 shadow-sm space-y-3"
               >
                 {/* Exercise Header */}
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{we.exercise_name}</h3>
-                    <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-medium tracking-wide mt-0.5">
-                      {we.exercise_category}
-                    </span>
+                <div className="flex items-start justify-between gap-2">
+                  <div
+                    className="flex-1 cursor-pointer select-none"
+                    onClick={() => toggleExerciseCollapse(we.id)}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                        {we.exercise_name}
+                      </h3>
+                      {isCollapsed ? (
+                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                      ) : (
+                        <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-medium tracking-wide">
+                        {we.exercise_category}
+                      </span>
+                      {totalSets > 0 && (
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                            completedSets === totalSets
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                          }`}
+                        >
+                          {completedSets}/{totalSets} sets
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5">
+
+                  <div className="flex items-center gap-1.5 shrink-0">
                     {/* Swap / Replace button */}
                     <button
                       type="button"
@@ -552,254 +633,324 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                   </div>
                 </div>
 
-                {/* Previous Performance Context Pill */}
-                {perf && perf.found && (
-                  <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl flex items-start gap-2">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                    <div className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold">Last Session: </span>
-                      {perf.sets.map((s, idx) => (
-                        <span key={s.id} className="font-mono font-medium">
-                          {s.weight}kg × {s.reps}
-                          {idx < perf.sets.length - 1 ? '  •  ' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Sets Table */}
-                {we.sets && we.sets.length > 0 && (
-                  <div className="space-y-1.5 pt-1">
-                    <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2">
-                      <div className="col-span-2">Set</div>
-                      <div className="col-span-4 text-center">Weight</div>
-                      <div className="col-span-3 text-center">Reps</div>
-                      <div className="col-span-3 text-right">Complete</div>
-                    </div>
-
-                    {we.sets.map((s) => {
-                      const isCompleted = !!s.completed_at;
-
-                      return (
-                        <div
-                          key={s.id}
-                          className={`grid grid-cols-12 items-center p-2 rounded-2xl text-sm transition-all ${
-                            isCompleted
-                              ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
-                              : s.is_warmup
-                              ? 'bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-950 dark:text-amber-100'
-                              : 'bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'
-                          }`}
-                        >
-                          {/* Set number */}
-                          <div className="col-span-2 flex items-center gap-1 font-mono font-semibold">
-                            <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}>
-                              #{s.set_number}
+                {/* Collapsible Exercise Body */}
+                {!isCollapsed && (
+                  <>
+                    {/* Previous Performance Context Pill */}
+                    {perf && perf.found && (
+                      <div className="p-2.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/50 rounded-xl flex items-start gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+                        <div className="text-xs text-slate-700 dark:text-slate-300 leading-snug">
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold">Last Session: </span>
+                          {perf.sets.map((s, idx) => (
+                            <span key={s.id} className="font-mono font-medium">
+                              {s.weight}kg × {s.reps}
+                              {idx < perf.sets.length - 1 ? '  •  ' : ''}
                             </span>
-                            {s.is_warmup ? (
-                              <span className="text-[10px] px-1 bg-amber-200 dark:bg-amber-500 text-amber-900 dark:text-slate-950 font-bold rounded">
-                                W
-                              </span>
-                            ) : null}
-                          </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                          {/* Weight */}
-                          <div className="col-span-4 text-center font-mono font-semibold text-sm">
-                            {!isCompleted ? (
-                              <div className="inline-flex items-center justify-center gap-1">
-                                <input
-                                  type="number"
-                                  step="0.5"
-                                  value={s.weight ?? ''}
-                                  onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
-                                  className="w-14 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
-                                />
-                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
+                    {/* Sets Table */}
+                    {we.sets && we.sets.length > 0 && (
+                      <div className="space-y-2 pt-1">
+                        <div className="grid grid-cols-12 text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-2">
+                          <div className="col-span-2">Set</div>
+                          <div className="col-span-4 text-center">Weight</div>
+                          <div className="col-span-3 text-center">Reps</div>
+                          <div className="col-span-3 text-right">Actions</div>
+                        </div>
+
+                        {we.sets.map((s) => {
+                          const isCompleted = !!s.completed_at;
+                          const isEditingThisNote = editingNoteSetId === s.id;
+
+                          return (
+                            <div key={s.id} className="space-y-1">
+                              <div
+                                className={`grid grid-cols-12 items-center p-2 rounded-2xl text-sm transition-all ${
+                                  isCompleted
+                                    ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
+                                    : s.is_warmup
+                                    ? 'bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-950 dark:text-amber-100'
+                                    : 'bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white'
+                                }`}
+                              >
+                                {/* Set number */}
+                                <div className="col-span-2 flex items-center gap-1 font-mono font-semibold">
+                                  <span className={isCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-300'}>
+                                    #{s.set_number}
+                                  </span>
+                                  {s.is_warmup ? (
+                                    <span className="text-[10px] px-1 bg-amber-200 dark:bg-amber-500 text-amber-900 dark:text-slate-950 font-bold rounded">
+                                      W
+                                    </span>
+                                  ) : null}
+                                </div>
+
+                                {/* Weight */}
+                                <div className="col-span-4 text-center font-mono font-semibold text-sm">
+                                  {!isCompleted ? (
+                                    <div className="inline-flex items-center justify-center gap-1">
+                                      <input
+                                        type="number"
+                                        step="0.5"
+                                        value={s.weight ?? ''}
+                                        onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
+                                        className="w-14 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                      />
+                                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
+                                    </div>
+                                  ) : (
+                                    <span>
+                                      {s.weight} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Reps */}
+                                <div className="col-span-3 text-center font-mono font-semibold text-sm">
+                                  {!isCompleted ? (
+                                    <div className="inline-flex items-center justify-center gap-1">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        value={s.reps ?? ''}
+                                        onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
+                                        className="w-12 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
+                                      />
+                                      <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
+                                    </div>
+                                  ) : (
+                                    <span>
+                                      {s.reps} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Actions: Note, Complete Checkmark & Delete */}
+                                <div className="col-span-3 flex items-center justify-end gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleStartEditNote(s)}
+                                    className={`p-1.5 rounded-lg active:scale-90 transition-all ${
+                                      s.notes
+                                        ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                    }`}
+                                    title={s.notes ? `Note: "${s.notes}"` : 'Add note to set'}
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleToggleSetComplete(s)}
+                                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                                      isCompleted
+                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                        : 'border-2 border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
+                                    }`}
+                                    title={isCompleted ? 'Mark incomplete' : 'Complete set'}
+                                  >
+                                    <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSet(s.id)}
+                                    className="p-1 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
+                                    title="Delete set"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
-                            ) : (
-                              <span>
-                                {s.weight} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">kg</span>
-                              </span>
-                            )}
-                          </div>
 
-                          {/* Reps */}
-                          <div className="col-span-3 text-center font-mono font-semibold text-sm">
-                            {!isCompleted ? (
-                              <div className="inline-flex items-center justify-center gap-1">
-                                <input
-                                  type="number"
-                                  min="1"
-                                  value={s.reps ?? ''}
-                                  onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
-                                  className="w-12 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-lg py-1 px-1 text-center font-mono font-semibold text-xs focus:outline-none focus:border-blue-500"
-                                />
-                                <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
-                              </div>
-                            ) : (
-                              <span>
-                                {s.reps} <span className="text-[11px] text-slate-500 dark:text-slate-400 font-sans">reps</span>
-                              </span>
-                            )}
-                          </div>
+                              {/* Note display badge when present and not editing */}
+                              {s.notes && !isEditingThisNote && (
+                                <div
+                                  onClick={() => handleStartEditNote(s)}
+                                  className="mx-1 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 text-[11px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700/80 transition-colors w-fit max-w-full"
+                                  title="Click to edit note"
+                                >
+                                  <MessageSquare className="w-3 h-3 text-blue-500 shrink-0" />
+                                  <span className="truncate italic">"{s.notes}"</span>
+                                </div>
+                              )}
 
-                          {/* Actions: Complete Checkmark & Delete */}
-                          <div className="col-span-3 flex items-center justify-end gap-1.5">
+                              {/* Inline note edit row */}
+                              {isEditingThisNote && (
+                                <div className="mx-1 p-2 bg-slate-100 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 rounded-xl flex items-center gap-1.5 animate-in fade-in duration-150">
+                                  <MessageSquare className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    placeholder="Set note (e.g. felt easy, tired on rep 8)..."
+                                    value={editingNoteText}
+                                    onChange={(e) => setEditingNoteText(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSaveSetNote(s.id, editingNoteText);
+                                      if (e.key === 'Escape') {
+                                        setEditingNoteSetId(null);
+                                        setEditingNoteText('');
+                                      }
+                                    }}
+                                    className="flex-1 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveSetNote(s.id, editingNoteText)}
+                                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg active:scale-95 transition-all shadow-xs"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingNoteSetId(null);
+                                      setEditingNoteText('');
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg text-xs"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Quick Add Set button */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddSet(we)}
+                            className="w-full py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
+                          >
+                            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                            Add Set
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Inline Set Edit Modal / Drawer if editing */}
+                    {editingSet && we.sets.some((s) => s.id === editingSet.id) && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-2xl space-y-2">
+                        <div className="text-xs font-bold text-blue-600 dark:text-blue-400">Edit Set</div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
+                            <input
+                              type="number"
+                              step="0.5"
+                              inputMode="decimal"
+                              value={editingSet.weight}
+                              onChange={(e) =>
+                                setEditingSet((prev) => ({ ...prev, weight: e.target.value }))
+                              }
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
+                            <input
+                              type="number"
+                              inputMode="numeric"
+                              value={editingSet.reps}
+                              onChange={(e) =>
+                                setEditingSet((prev) => ({ ...prev, reps: e.target.value }))
+                              }
+                              className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={editingSet.is_warmup}
+                              onChange={(e) =>
+                                setEditingSet((prev) => ({ ...prev, is_warmup: e.target.checked }))
+                              }
+                              className="rounded bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-blue-600"
+                            />
+                            Warmup set
+                          </label>
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => handleToggleSetComplete(s)}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-90 ${
-                                isCompleted
-                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
-                                  : 'border-2 border-slate-300 dark:border-slate-700 hover:border-emerald-500 hover:bg-emerald-500/10 text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400'
-                              }`}
-                              title={isCompleted ? 'Mark incomplete' : 'Complete set'}
+                              onClick={() => setEditingSet(null)}
+                              className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-lg"
                             >
-                              <Check className="w-4 h-4 stroke-[2.5]" />
+                              Cancel
                             </button>
                             <button
-                              onClick={() => handleDeleteSet(s.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg active:scale-90 transition-transform"
-                              title="Delete set"
+                              onClick={handleSaveEditSet}
+                              className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              Save
                             </button>
                           </div>
                         </div>
-                      );
-                    })}
-
-                    {/* Quick Add Set button */}
-                    <div className="pt-1">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickAddSet(we)}
-                        className="w-full py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-950/60 dark:hover:bg-slate-800/80 border border-dashed border-slate-300 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center justify-center gap-1.5 active:scale-98 transition-all"
-                      >
-                        <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                        Add Set
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Inline Set Edit Modal / Drawer if editing */}
-                {editingSet && we.sets.some((s) => s.id === editingSet.id) && (
-                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/60 rounded-2xl space-y-2">
-                    <div className="text-xs font-bold text-blue-600 dark:text-blue-400">Edit Set</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
-                        <input
-                          type="number"
-                          step="0.5"
-                          inputMode="decimal"
-                          value={editingSet.weight}
-                          onChange={(e) =>
-                            setEditingSet((prev) => ({ ...prev, weight: e.target.value }))
-                          }
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
-                        />
                       </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
-                        <input
-                          type="number"
-                          inputMode="numeric"
-                          value={editingSet.reps}
-                          onChange={(e) =>
-                            setEditingSet((prev) => ({ ...prev, reps: e.target.value }))
-                          }
-                          className="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-2 text-sm font-mono font-semibold"
-                        />
+                    )}
+
+                    {/* FAST SET ENTRY FORM (The Ergonomic Core - Condensed Sleek Inputs) */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {/* Weight Input */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.5"
+                            inputMode="decimal"
+                            value={currentInput.weight}
+                            onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2 px-3 text-base font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
+                          />
+                        </div>
+
+                        {/* Reps Input */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
+                          </div>
+                          <input
+                            type="number"
+                            inputMode="numeric"
+                            value={currentInput.reps}
+                            onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
+                            className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl py-2 px-3 text-base font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editingSet.is_warmup}
-                          onChange={(e) =>
-                            setEditingSet((prev) => ({ ...prev, is_warmup: e.target.checked }))
-                          }
-                          className="rounded bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-blue-600"
-                        />
-                        Warmup set
-                      </label>
-                      <div className="flex gap-2">
+
+                      {/* Warmup Checkbox & 1-TAP "LOG SET" BUTTON */}
+                      <div className="flex items-center gap-2 pt-0.5">
                         <button
-                          onClick={() => setEditingSet(null)}
-                          className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-lg"
+                          type="button"
+                          onClick={() => updateInputState(we.id, 'is_warmup', !currentInput.is_warmup)}
+                          className={`px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
+                            currentInput.is_warmup
+                              ? 'bg-amber-100 dark:bg-amber-500 border-amber-300 dark:border-amber-400 text-amber-900 dark:text-slate-950 font-bold'
+                              : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
+                          }`}
+                          title="Mark as warm-up set"
                         >
-                          Cancel
+                          Warmup
                         </button>
                         <button
-                          onClick={handleSaveEditSet}
-                          className="px-3 py-1 bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm"
+                          onClick={() => handleLogSet(we)}
+                          className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                         >
-                          Save
+                          <Plus className="w-4 h-4 stroke-[2.5]" />
+                          Log Set
                         </button>
                       </div>
                     </div>
-                  </div>
+                  </>
                 )}
-
-                {/* FAST SET ENTRY FORM (The Ergonomic Core) */}
-                <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-2.5">
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {/* Weight Input */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Weight (KG)</label>
-                      </div>
-                      <input
-                        type="number"
-                        step="0.5"
-                        inputMode="decimal"
-                        value={currentInput.weight}
-                        onChange={(e) => updateInputState(we.id, 'weight', e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-3 text-xl font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
-                      />
-                    </div>
-
-                    {/* Reps Input */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase">Reps</label>
-                      </div>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        value={currentInput.reps}
-                        onChange={(e) => updateInputState(we.id, 'reps', e.target.value)}
-                        className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white rounded-xl p-3 text-xl font-mono font-bold text-center focus:outline-none focus:border-blue-500 shadow-xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Warmup Checkbox & 1-TAP "LOG SET" BUTTON */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => updateInputState(we.id, 'is_warmup', !currentInput.is_warmup)}
-                      className={`px-3 py-3 rounded-xl border text-xs font-semibold transition-all active:scale-95 ${
-                        currentInput.is_warmup
-                          ? 'bg-amber-100 dark:bg-amber-500 border-amber-300 dark:border-amber-400 text-amber-900 dark:text-slate-950 font-bold'
-                          : 'bg-slate-100 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400'
-                      }`}
-                      title="Mark as warm-up set"
-                    >
-                      Warmup
-                    </button>
-                    <button
-                      onClick={() => handleLogSet(we)}
-                      className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm rounded-xl shadow-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-5 h-5 stroke-[2.5]" />
-                      Log Set
-                    </button>
-                  </div>
-                </div>
               </div>
             );
           })

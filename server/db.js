@@ -224,9 +224,15 @@ async function initDb() {
           weight REAL NOT NULL,
           reps INTEGER NOT NULL,
           is_warmup INTEGER NOT NULL DEFAULT 0,
-          completed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          notes TEXT
         );
       `);
+
+      // Safely ensure notes column exists on workout_sets
+      try {
+        await db.execute('ALTER TABLE workout_sets ADD COLUMN notes TEXT');
+      } catch (_) {}
 
       // 6. Templates
       await db.execute(`

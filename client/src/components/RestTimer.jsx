@@ -162,14 +162,14 @@ export default function RestTimer() {
   // Visual alert banner when timer finishes
   if (isFinished) {
     return (
-      <div className="bg-amber-500 border-b border-amber-400 text-slate-950 px-4 py-2 flex items-center justify-between shadow-lg animate-pulse">
+      <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 bg-amber-500 text-slate-950 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl border border-amber-400 animate-pulse transition-all">
         <div className="flex items-center gap-2">
           <BellRing className="w-4 h-4 text-slate-950 animate-bounce" />
           <span className="text-xs font-semibold">Rest Complete! (2:00)</span>
         </div>
         <button
           onClick={dismissAlert}
-          className="px-2.5 py-1 bg-slate-950 text-amber-300 text-xs font-medium rounded-lg active:scale-95 transition-transform"
+          className="px-3 py-1 bg-slate-950 text-amber-300 text-xs font-medium rounded-xl active:scale-95 transition-transform"
         >
           Dismiss
         </button>
@@ -178,11 +178,11 @@ export default function RestTimer() {
   }
 
   return (
-    <div className="relative bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-2 flex items-center justify-between shadow-sm transition-colors">
+    <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl transition-all overflow-hidden">
       {/* Background progress fill */}
       {isRunning && (
         <div
-          className="absolute left-0 bottom-0 top-0 bg-blue-600/10 dark:bg-blue-500/10 transition-all pointer-events-none"
+          className="absolute left-0 bottom-0 top-0 bg-blue-600/10 dark:bg-blue-500/10 transition-all pointer-events-none rounded-2xl"
           style={{ width: `${progressPercent}%` }}
         />
       )}
@@ -193,7 +193,7 @@ export default function RestTimer() {
           className={`w-7 h-7 rounded-lg flex items-center justify-center font-mono font-medium text-xs transition-all ${
             isRunning
               ? 'bg-blue-600 text-white ring-2 ring-blue-500/40 animate-pulse'
-              : 'bg-slate-150 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
           }`}
         >
           <Clock className="w-3.5 h-3.5" />

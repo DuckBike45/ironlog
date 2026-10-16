@@ -184,14 +184,21 @@ export default function WorkoutHistory() {
                     {we.sets && we.sets.map((s) => (
                       <div
                         key={s.id}
-                        className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-white dark:bg-slate-900/60 font-mono"
+                        className="py-1 px-2 rounded-lg bg-white dark:bg-slate-900/60 font-mono text-xs space-y-0.5"
                       >
-                        <span className="text-slate-500 dark:text-slate-400">
-                          Set {s.set_number} {s.is_warmup ? '(Warmup)' : ''}
-                        </span>
-                        <span className="font-semibold text-slate-900 dark:text-white">
-                          {s.weight} kg × {s.reps} reps
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 dark:text-slate-400">
+                            Set {s.set_number} {s.is_warmup ? '(Warmup)' : ''}
+                          </span>
+                          <span className="font-semibold text-slate-900 dark:text-white">
+                            {s.weight} kg × {s.reps} reps
+                          </span>
+                        </div>
+                        {s.notes && (
+                          <div className="text-[10px] text-slate-500 dark:text-slate-400 font-sans italic pl-1 border-l-2 border-blue-400">
+                            "{s.notes}"
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
