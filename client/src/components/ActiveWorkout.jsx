@@ -98,6 +98,9 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   // Active inline editing set: { id, weight, reps, is_warmup } or null
   const [editingSet, setEditingSet] = useState(null);
 
+  // Debounce timers for set inputs so typing is smooth and never gets interrupted
+  const updateDebounceTimers = useRef({});
+
   // Collapse state for exercises: workoutExerciseId -> boolean (true = collapsed)
   const [collapsedExercises, setCollapsedExercises] = useState({});
 
@@ -331,13 +334,16 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
-  const handleQuickUpdateSet = async (set, field, value) => {
-    const updatedWeight = field === 'weight' ? (value === '' ? 0 : parseFloat(value)) : set.weight;
-    const updatedReps = field === 'reps' ? (value === '' ? 0 : parseInt(value, 10)) : set.reps;
-    const updatedNotes = field === 'notes' ? (value ? value.trim() : null) : set.notes;
+  const handleQuickUpdateSet = (set, field, rawValue) => {
+    let cleanValue = rawValue;
+    // Strip redundant leading zeros when typing (e.g. "05" -> "5", but keep "0" or "0.5")
+    if (field === 'weight' || field === 'reps') {
+      if (cleanValue !== '' && cleanValue !== '0' && !cleanValue.startsWith('0.')) {
+        cleanValue = cleanValue.replace(/^0+(?=\d)/, '');
+      }
+    }
 
-    // Optimistic update
-    const previousWorkout = workout;
+    // Instant optimistic UI update (allows empty string while user is deleting/typing!)
     const optimisticWorkout = {
       ...workout,
       exercises: workout.exercises.map((e) => ({
@@ -346,7 +352,61 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
           if (s.id === set.id) {
             return {
               ...s,
-              [field]: value,
+              [field]: cleanValue,
+            };
+          }
+          return s;
+        }),
+      })),
+    };
+    onWorkoutUpdated(optimisticWorkout);
+
+    // Clear previous timer for this field
+    const timerKey = `${set.id}_${field}`;
+    if (updateDebounceTimers.current[timerKey]) {
+      clearTimeout(updateDebounceTimers.current[timerKey]);
+    }
+
+    // Debounce server update (400ms) - do NOT send empty string to server while user is typing
+    updateDebounceTimers.current[timerKey] = setTimeout(async () => {
+      if (cleanValue === '') return;
+      const numVal = field === 'weight' ? parseFloat(cleanValue) : parseInt(cleanValue, 10);
+      if (isNaN(numVal)) return;
+
+      try {
+        const response = await api.updateSet(set.id, {
+          [field]: numVal,
+        });
+        onWorkoutUpdated(response.workout);
+      } catch (err) {
+        console.error('Failed to sync set update', err);
+      }
+    }, 400);
+  };
+
+  const handleBlurSet = async (set, field, rawValue) => {
+    // If left completely blank on blur, fallback to safe defaults (0 for weight, 1 for reps)
+    let finalValue = rawValue;
+    if (finalValue === '' || finalValue == null) {
+      finalValue = field === 'weight' ? 0 : 1;
+    } else {
+      finalValue = field === 'weight' ? (parseFloat(finalValue) || 0) : (parseInt(finalValue, 10) || 1);
+    }
+
+    const timerKey = `${set.id}_${field}`;
+    if (updateDebounceTimers.current[timerKey]) {
+      clearTimeout(updateDebounceTimers.current[timerKey]);
+    }
+
+    const optimisticWorkout = {
+      ...workout,
+      exercises: workout.exercises.map((e) => ({
+        ...e,
+        sets: (e.sets || []).map((s) => {
+          if (s.id === set.id) {
+            return {
+              ...s,
+              [field]: finalValue,
             };
           }
           return s;
@@ -357,14 +417,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
     try {
       const response = await api.updateSet(set.id, {
-        weight: isNaN(updatedWeight) ? 0 : updatedWeight,
-        reps: isNaN(updatedReps) ? 0 : updatedReps,
-        is_warmup: set.is_warmup,
-        notes: updatedNotes,
+        [field]: finalValue,
       });
       onWorkoutUpdated(response.workout);
     } catch (err) {
-      onWorkoutUpdated(previousWorkout);
+      console.error('Failed to sync set on blur', err);
     }
   };
 
@@ -565,8 +622,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   return (
     <div className="pb-28">
-      {/* Top Header Bar (Sticky, with ample safe-area padding so Discard & Finish never get lost behind status bar) */}
-      <div className="sticky top-0 z-30 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800/80 px-4 pb-3 pt-[max(env(safe-area-inset-top),20px)] flex items-center justify-between transition-colors shadow-xs">
+      {/* Top Header Bar (Solid background, guaranteed clearance below notch/status bar) */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pb-3 pt-[max(env(safe-area-inset-top,0px),52px)] flex items-center justify-between transition-colors shadow-xs">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
@@ -753,13 +810,15 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 ) : null}
                               </button>
 
-                              {/* Weight Input (Direct in set, increased font) */}
+                              {/* Weight Input (Direct in set, auto-select on focus, debounced update) */}
                               <div className="w-16 shrink-0 text-center">
                                 <input
                                   type="number"
                                   step="0.5"
                                   value={s.weight ?? ''}
+                                  onFocus={(e) => e.target.select()}
                                   onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
+                                  onBlur={(e) => handleBlurSet(s, 'weight', e.target.value)}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
                                     isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
@@ -768,13 +827,15 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 />
                               </div>
 
-                              {/* Reps Input (Direct in set, increased font, no 'r') */}
+                              {/* Reps Input (Direct in set, auto-select on focus, debounced update, no 'r') */}
                               <div className="w-12 shrink-0 text-center">
                                 <input
                                   type="number"
                                   min="1"
                                   value={s.reps ?? ''}
+                                  onFocus={(e) => e.target.select()}
                                   onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
+                                  onBlur={(e) => handleBlurSet(s, 'reps', e.target.value)}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
                                     isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
@@ -783,7 +844,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 />
                               </div>
 
-                              {/* Comment Field (Visible with smaller placeholder font) */}
+                              {/* Comment Field (Visible with 11px font and 10px placeholder) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
@@ -800,7 +861,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                       e.target.blur();
                                     }
                                   }}
-                                  className={`w-full rounded-lg py-1 px-2 text-xs text-slate-900 dark:text-white placeholder:text-[9.5px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
+                                  className={`w-full rounded-lg py-1 px-1.5 text-[11px] text-slate-900 dark:text-white placeholder:text-[10px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
                                     isCompleted
                                       ? 'bg-white/50 dark:bg-slate-900/30 border border-emerald-200/60 dark:border-emerald-700/40'
                                       : 'bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 hover:bg-white dark:hover:bg-slate-900'

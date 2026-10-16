@@ -55,7 +55,7 @@ export default function PinEntry({ onSuccess, theme, onToggleTheme }) {
       {onToggleTheme && (
         <button
           onClick={onToggleTheme}
-          className="absolute top-4 right-4 p-2.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm active:scale-95 transition-all"
+          className="absolute top-[max(env(safe-area-inset-top,0px),16px)] right-4 p-2.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm active:scale-95 transition-all"
           title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
