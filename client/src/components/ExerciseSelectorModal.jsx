@@ -66,8 +66,8 @@ export default function ExerciseSelectorModal({ isOpen, onClose, onSelect }) {
   });
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex flex-col justify-center items-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full sm:max-w-md max-h-[88vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-auto">
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex flex-col justify-center items-center modal-safe-overlay overflow-y-auto">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full sm:max-w-md max-h-full flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 my-auto">
         
         {/* Header */}
         <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">

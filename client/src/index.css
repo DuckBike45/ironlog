@@ -41,6 +41,14 @@ body {
   padding-bottom: max(12px, env(safe-area-inset-bottom));
 }
 
+/* Modal and Popup Safe Area Overlay (Ensures no modal ever overlaps Dynamic Island) */
+.modal-safe-overlay {
+  padding-top: max(68px, calc(env(safe-area-inset-top, 0px) + 20px));
+  padding-bottom: max(24px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-8px); }

@@ -212,9 +212,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
-      {/* Toast Notification */}
+      {/* Toast Notification (Safely below Dynamic Island) */}
       {toastMessage && (
-        <div className="fixed top-4 left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-top-4 duration-200">
+        <div className="fixed top-[max(calc(env(safe-area-inset-top,0px)+14px),64px)] left-4 right-4 z-50 flex justify-center pointer-events-none animate-in fade-in slide-in-from-top-4 duration-200">
           <div className="bg-emerald-600 text-white font-semibold text-xs py-2.5 px-4 rounded-2xl shadow-xl flex items-center gap-2 border border-emerald-400">
             <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
             <span>{toastMessage}</span>
