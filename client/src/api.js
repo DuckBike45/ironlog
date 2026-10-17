@@ -190,6 +190,12 @@ export const api = {
       body: JSON.stringify({ exercise_id: newExerciseId }),
     }),
 
+  reorderWorkoutExercises: (workoutId, exerciseOrder) =>
+    request(`/workouts/${workoutId}/exercises/reorder`, {
+      method: 'PUT',
+      body: JSON.stringify({ exercise_order: exerciseOrder }),
+    }),
+
   addSet: (workoutExerciseId, setData) =>
     request(`/workout-exercises/${workoutExerciseId}/sets`, {
       method: 'POST',

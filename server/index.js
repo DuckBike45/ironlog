@@ -841,6 +841,31 @@ app.put('/api/workout-exercises/:id', async (req, res) => {
   }
 });
 
+// Reorder exercises in a workout
+app.put('/api/workouts/:id/exercises/reorder', async (req, res) => {
+  try {
+    const workoutId = parseInt(req.params.id, 10);
+    const { exercise_order } = req.body;
+
+    if (!Array.isArray(exercise_order)) {
+      return res.status(400).json({ error: 'exercise_order array is required' });
+    }
+
+    for (let i = 0; i < exercise_order.length; i++) {
+      await db.execute({
+        sql: 'UPDATE workout_exercises SET order_index = ? WHERE id = ? AND workout_id = ?',
+        args: [i, parseInt(exercise_order[i], 10), workoutId],
+      });
+    }
+
+    const fullWorkout = await getFullWorkoutDetails(workoutId);
+    res.json(fullWorkout);
+  } catch (err) {
+    console.error('Error reordering workout exercises:', err);
+    res.status(500).json({ error: 'Failed to reorder exercises' });
+  }
+});
+
 // Remove an exercise from a workout
 app.delete('/api/workout-exercises/:id', async (req, res) => {
   try {
@@ -876,7 +901,7 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
     }
 
     const weRes = await db.execute({
-      sql: 'SELECT we.workout_id, w.has_structured_sets FROM workout_exercises we JOIN workouts w ON we.workout_id = w.id WHERE we.id = ?',
+      sql: 'SELECT we.workout_id, w.has_structured_sets, w.completed_at FROM workout_exercises we JOIN workouts w ON we.workout_id = w.id WHERE we.id = ?',
       args: [workoutExerciseId],
     });
 
@@ -886,10 +911,13 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
 
     const workoutId = weRes.rows[0].workout_id;
     const isStructured = Number(weRes.rows[0].has_structured_sets) === 1;
+    const workoutCompletedAt = weRes.rows[0].completed_at;
 
     let finalCompletedAt;
     if (completed_at !== undefined) {
       finalCompletedAt = completed_at;
+    } else if (workoutCompletedAt) {
+      finalCompletedAt = workoutCompletedAt;
     } else if (isStructured) {
       finalCompletedAt = null;
     } else {

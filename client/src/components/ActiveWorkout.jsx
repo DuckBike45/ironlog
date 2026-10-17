@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, Check, Trash2, Edit3, X, Dumbbell, History, 
-  ChevronDown, ChevronUp, AlertTriangle, Sparkles, ArrowLeftRight, MessageSquare 
+  ChevronDown, ChevronUp, ArrowUp, ArrowDown, AlertTriangle, Sparkles, ArrowLeftRight, MessageSquare 
 } from 'lucide-react';
 import { api } from '../api';
 import RestTimer from './RestTimer';
@@ -109,12 +109,22 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   // Debounce timers for set inputs so typing is smooth and never gets interrupted
   const updateDebounceTimers = useRef({});
 
+  // Refs to prevent optimistic set creation / background sync race conditions
+  const latestWorkoutRef = useRef(workout);
+  latestWorkoutRef.current = workout;
+  const clientKeyMapRef = useRef({});
+  const pendingTempUpdatesRef = useRef({});
+  const deletedTempIdsRef = useRef(new Set());
+
+  const applyLocalWorkoutUpdate = (updaterFn) => {
+    const next = updaterFn(latestWorkoutRef.current);
+    latestWorkoutRef.current = next;
+    onWorkoutUpdated(next);
+    return next;
+  };
+
   // Collapse state for exercises: workoutExerciseId -> boolean (true = collapsed)
   const [collapsedExercises, setCollapsedExercises] = useState({});
-
-  // Active set note inline edit: setId or null, and draft text
-  const [editingNoteSetId, setEditingNoteSetId] = useState(null);
-  const [editingNoteText, setEditingNoteText] = useState('');
 
   // Load last performance for all exercises in this workout
   useEffect(() => {
@@ -140,48 +150,18 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   const getInputState = (we) => {
     if (setInputs[we.id]) return setInputs[we.id];
 
-    // Auto-fill heuristic:
-    // 1. If this exercise has previous sets in this workout, copy the last set's weight & reps
     if (we.sets && we.sets.length > 0) {
       const lastSet = we.sets[we.sets.length - 1];
       return { weight: lastSet.weight.toString(), reps: lastSet.reps.toString(), is_warmup: false };
     }
 
-    // 2. Otherwise, check last session's performance
     const perf = lastPerformances[we.exercise_id];
     if (perf && perf.found && perf.sets && perf.sets.length > 0) {
       const firstSet = perf.sets[0];
       return { weight: firstSet.weight.toString(), reps: firstSet.reps.toString(), is_warmup: false };
     }
 
-    // 3. Fallback defaults
     return { weight: '60', reps: '10', is_warmup: false };
-  };
-
-  const updateInputState = (workoutExerciseId, field, value) => {
-    setSetInputs((prev) => ({
-      ...prev,
-      [workoutExerciseId]: {
-        ...getInputState(workout.exercises.find((e) => e.id === workoutExerciseId)),
-        ...prev[workoutExerciseId],
-        [field]: value,
-      },
-    }));
-  };
-
-  const handleAdjustWeight = (workoutExerciseId, delta) => {
-    const current = getInputState(workout.exercises.find((e) => e.id === workoutExerciseId));
-    const currentVal = parseFloat(current.weight) || 0;
-    const newVal = Math.max(0, currentVal + delta);
-    // Format nicely without excessive decimals
-    updateInputState(workoutExerciseId, 'weight', (Math.round(newVal * 100) / 100).toString());
-  };
-
-  const handleAdjustReps = (workoutExerciseId, delta) => {
-    const current = getInputState(workout.exercises.find((e) => e.id === workoutExerciseId));
-    const currentVal = parseInt(current.reps, 10) || 0;
-    const newVal = Math.max(1, currentVal + delta);
-    updateInputState(workoutExerciseId, 'reps', newVal.toString());
   };
 
   const handleAddExercise = async (exercise) => {
@@ -208,6 +188,36 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
+  const handleMoveExercise = async (index, direction) => {
+    const currentExercises = [...(latestWorkoutRef.current.exercises || [])];
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= currentExercises.length) return;
+
+    const previousWorkout = latestWorkoutRef.current;
+    const [moved] = currentExercises.splice(index, 1);
+    currentExercises.splice(targetIndex, 0, moved);
+
+    const reordered = currentExercises.map((ex, idx) => ({
+      ...ex,
+      order_index: idx,
+    }));
+
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: reordered,
+    }));
+
+    try {
+      await api.reorderWorkoutExercises(
+        workout.id,
+        reordered.map((ex) => ex.id)
+      );
+    } catch (err) {
+      onWorkoutUpdated(previousWorkout);
+      alert(err.message || 'Failed to reorder exercises');
+    }
+  };
+
   const handleRemoveExercise = async (workoutExerciseId) => {
     if (!window.confirm('Remove this exercise from your workout?')) return;
     try {
@@ -218,87 +228,27 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
-  const handleLogSet = async (we) => {
-    const current = getInputState(we);
-    const weight = parseFloat(current.weight);
-    const reps = parseInt(current.reps, 10);
-
-    if (isNaN(weight) || isNaN(reps) || reps <= 0) {
-      alert('Please enter valid weight and reps');
-      return;
-    }
-
-    // 1. Optimistic Update: Immediately reflect new set in UI (0ms latency)
-    const optimisticSetId = 'temp_' + Date.now();
-    const nextSetNumber = ((we.sets && we.sets.length) || 0) + 1;
-    const optimisticSet = {
-      id: optimisticSetId,
-      workout_exercise_id: we.id,
-      set_number: nextSetNumber,
-      weight,
-      reps,
-      is_warmup: current.is_warmup ? 1 : 0,
-      completed_at: new Date().toISOString(),
-    };
-
-    const previousWorkout = workout;
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => {
-        if (e.id === we.id) {
-          return {
-            ...e,
-            sets: [...(e.sets || []), optimisticSet],
-          };
-        }
-        return e;
-      }),
-    };
-
-    // Instantly update UI and advance draft input
-    onWorkoutUpdated(optimisticWorkout);
-    setSetInputs((prev) => ({
-      ...prev,
-      [we.id]: {
-        weight: weight.toString(),
-        reps: reps.toString(),
-        is_warmup: false,
-      },
-    }));
-
-    try {
-      const response = await api.addSet(we.id, {
-        weight,
-        reps,
-        is_warmup: current.is_warmup ? 1 : 0,
-      });
-
-      // Reconcile with verified server response
-      onWorkoutUpdated(response.workout);
-    } catch (err) {
-      // Revert on error
-      onWorkoutUpdated(previousWorkout);
-      alert(err.message || 'Failed to log set');
-    }
-  };
-
   const handleDeleteSet = async (setId) => {
-    const previousWorkout = workout;
-    // Optimistic delete
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    const previousWorkout = latestWorkoutRef.current;
+
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
         sets: (e.sets || [])
           .filter((s) => s.id !== setId)
           .map((s, idx) => ({ ...s, set_number: idx + 1 })),
       })),
-    };
-    onWorkoutUpdated(optimisticWorkout);
+    }));
+
+    if (String(setId).startsWith('temp_')) {
+      deletedTempIdsRef.current.add(setId);
+      delete pendingTempUpdatesRef.current[setId];
+      return;
+    }
 
     try {
-      const response = await api.deleteSet(setId);
-      onWorkoutUpdated(response.workout);
+      await api.deleteSet(setId);
     } catch (err) {
       onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to delete set');
@@ -307,35 +257,33 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   const handleToggleSetComplete = async (set) => {
     const isNowComplete = !set.completed_at;
-    const previousWorkout = workout;
+    const newCompletedAt = isNowComplete ? new Date().toISOString() : null;
+    const previousWorkout = latestWorkoutRef.current;
 
-    // Optimistic toggle
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === set.id) {
-            return {
-              ...s,
-              completed_at: isNowComplete ? new Date().toISOString() : null,
-            };
-          }
-          return s;
-        }),
+        sets: (e.sets || []).map((s) =>
+          s.id === set.id ? { ...s, completed_at: newCompletedAt } : s
+        ),
       })),
-    };
+    }));
 
-    onWorkoutUpdated(optimisticWorkout);
-
-    // If marked complete, trigger rest timer
     if (isNowComplete) {
       window.dispatchEvent(new CustomEvent('ironlog:start-rest'));
     }
 
+    if (String(set.id).startsWith('temp_')) {
+      pendingTempUpdatesRef.current[set.id] = {
+        ...(pendingTempUpdatesRef.current[set.id] || {}),
+        completed_at: newCompletedAt,
+      };
+      return;
+    }
+
     try {
-      const response = await api.toggleSetComplete(set.id);
-      onWorkoutUpdated(response.workout);
+      await api.toggleSetComplete(set.id);
     } catch (err) {
       onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to toggle set completion');
@@ -344,56 +292,67 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   const handleQuickUpdateSet = (set, field, rawValue) => {
     let cleanValue = rawValue;
-    // Strip redundant leading zeros when typing (e.g. "05" -> "5", but keep "0" or "0.5")
     if (field === 'weight' || field === 'reps') {
       if (cleanValue !== '' && cleanValue !== '0' && !cleanValue.startsWith('0.')) {
         cleanValue = cleanValue.replace(/^0+(?=\d)/, '');
       }
     }
 
-    // Instant optimistic UI update (allows empty string while user is deleting/typing!)
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    // Instant local state update without waiting for or being overwritten by server responses
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === set.id) {
-            return {
-              ...s,
-              [field]: cleanValue,
-            };
-          }
-          return s;
-        }),
+        sets: (e.sets || []).map((s) =>
+          s.id === set.id ? { ...s, [field]: cleanValue } : s
+        ),
       })),
-    };
-    onWorkoutUpdated(optimisticWorkout);
+    }));
 
-    // Clear previous timer for this field
-    const timerKey = `${set.id}_${field}`;
+    const clientKey = clientKeyMapRef.current[set.id] || set.id;
+    const timerKey = `${clientKey}_${field}`;
     if (updateDebounceTimers.current[timerKey]) {
       clearTimeout(updateDebounceTimers.current[timerKey]);
     }
 
-    // Debounce server update (400ms) - do NOT send empty string to server while user is typing
     updateDebounceTimers.current[timerKey] = setTimeout(async () => {
-      if (cleanValue === '') return;
-      const numVal = field === 'weight' ? parseFloat(cleanValue) : parseInt(cleanValue, 10);
-      if (isNaN(numVal)) return;
+      if (field === 'weight' || field === 'reps') {
+        if (cleanValue === '') return;
+        const numVal = field === 'weight' ? parseFloat(cleanValue) : parseInt(cleanValue, 10);
+        if (isNaN(numVal)) return;
 
-      try {
-        const response = await api.updateSet(set.id, {
-          [field]: numVal,
-        });
-        onWorkoutUpdated(response.workout);
-      } catch (err) {
-        console.error('Failed to sync set update', err);
+        if (String(set.id).startsWith('temp_')) {
+          pendingTempUpdatesRef.current[set.id] = {
+            ...(pendingTempUpdatesRef.current[set.id] || {}),
+            [field]: numVal,
+          };
+          return;
+        }
+
+        try {
+          await api.updateSet(set.id, { [field]: numVal });
+        } catch (err) {
+          console.error('Failed to sync set update', err);
+        }
+      } else if (field === 'notes') {
+        const trimmed = cleanValue ? cleanValue.trim() : null;
+        if (String(set.id).startsWith('temp_')) {
+          pendingTempUpdatesRef.current[set.id] = {
+            ...(pendingTempUpdatesRef.current[set.id] || {}),
+            notes: trimmed,
+          };
+          return;
+        }
+        try {
+          await api.updateSet(set.id, { notes: trimmed });
+        } catch (err) {
+          console.error('Failed to sync set note', err);
+        }
       }
     }, 400);
   };
 
   const handleBlurSet = async (set, field, rawValue) => {
-    // If left completely blank on blur, fallback to safe defaults (0 for weight, 1 for reps)
     let finalValue = rawValue;
     if (finalValue === '' || finalValue == null) {
       finalValue = field === 'weight' ? 0 : 1;
@@ -401,33 +360,32 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       finalValue = field === 'weight' ? (parseFloat(finalValue) || 0) : (parseInt(finalValue, 10) || 1);
     }
 
-    const timerKey = `${set.id}_${field}`;
+    const clientKey = clientKeyMapRef.current[set.id] || set.id;
+    const timerKey = `${clientKey}_${field}`;
     if (updateDebounceTimers.current[timerKey]) {
       clearTimeout(updateDebounceTimers.current[timerKey]);
     }
 
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === set.id) {
-            return {
-              ...s,
-              [field]: finalValue,
-            };
-          }
-          return s;
-        }),
+        sets: (e.sets || []).map((s) =>
+          s.id === set.id ? { ...s, [field]: finalValue } : s
+        ),
       })),
-    };
-    onWorkoutUpdated(optimisticWorkout);
+    }));
+
+    if (String(set.id).startsWith('temp_')) {
+      pendingTempUpdatesRef.current[set.id] = {
+        ...(pendingTempUpdatesRef.current[set.id] || {}),
+        [field]: finalValue,
+      };
+      return;
+    }
 
     try {
-      const response = await api.updateSet(set.id, {
-        [field]: finalValue,
-      });
-      onWorkoutUpdated(response.workout);
+      await api.updateSet(set.id, { [field]: finalValue });
     } catch (err) {
       console.error('Failed to sync set on blur', err);
     }
@@ -435,27 +393,28 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   const handleToggleWarmup = async (set) => {
     const newWarmup = set.is_warmup ? 0 : 1;
-    const previousWorkout = workout;
+    const previousWorkout = latestWorkoutRef.current;
 
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === set.id) {
-            return { ...s, is_warmup: newWarmup };
-          }
-          return s;
-        }),
+        sets: (e.sets || []).map((s) =>
+          s.id === set.id ? { ...s, is_warmup: newWarmup } : s
+        ),
       })),
-    };
-    onWorkoutUpdated(optimisticWorkout);
+    }));
+
+    if (String(set.id).startsWith('temp_')) {
+      pendingTempUpdatesRef.current[set.id] = {
+        ...(pendingTempUpdatesRef.current[set.id] || {}),
+        is_warmup: newWarmup,
+      };
+      return;
+    }
 
     try {
-      const response = await api.updateSet(set.id, {
-        is_warmup: newWarmup,
-      });
-      onWorkoutUpdated(response.workout);
+      await api.updateSet(set.id, { is_warmup: newWarmup });
     } catch (err) {
       onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to toggle warmup');
@@ -463,14 +422,15 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   };
 
   const handleAddDirectSet = async (we) => {
-    const existingSets = we.sets || [];
+    const currentWe = (latestWorkoutRef.current.exercises || []).find((e) => e.id === we.id) || we;
+    const existingSets = currentWe.sets || [];
     let defaultWeight = 60;
     let defaultReps = 10;
 
     if (existingSets.length > 0) {
       const lastSet = existingSets[existingSets.length - 1];
-      defaultWeight = lastSet.weight != null ? lastSet.weight : 60;
-      defaultReps = lastSet.reps != null ? lastSet.reps : 10;
+      defaultWeight = lastSet.weight != null && lastSet.weight !== '' ? parseFloat(lastSet.weight) : 60;
+      defaultReps = lastSet.reps != null && lastSet.reps !== '' ? parseInt(lastSet.reps, 10) : 10;
     } else {
       const perf = lastPerformances[we.exercise_id];
       if (perf && perf.found && perf.sets && perf.sets.length > 0) {
@@ -480,7 +440,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
 
     const nextSetNumber = existingSets.length + 1;
-    const optimisticSetId = 'temp_' + Date.now();
+    const optimisticSetId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     const setCompletedAt = hasStructuredSets ? null : new Date().toISOString();
 
     const optimisticSet = {
@@ -494,10 +454,10 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       notes: null,
     };
 
-    const previousWorkout = workout;
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => {
+    const previousWorkout = latestWorkoutRef.current;
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => {
         if (e.id === we.id) {
           return {
             ...e,
@@ -506,9 +466,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         }
         return e;
       }),
-    };
-
-    onWorkoutUpdated(optimisticWorkout);
+    }));
 
     // If ad-hoc / free workout, auto-completing the set immediately starts the rest timer
     if (!hasStructuredSets) {
@@ -522,61 +480,45 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         is_warmup: 0,
         completed_at: setCompletedAt,
       });
-      onWorkoutUpdated(response.workout);
+
+      const realSet = response.set;
+      if (realSet && realSet.id) {
+        // If user deleted the temporary set before the server responded, delete it on server too
+        if (deletedTempIdsRef.current.has(optimisticSetId)) {
+          deletedTempIdsRef.current.delete(optimisticSetId);
+          await api.deleteSet(realSet.id);
+          return;
+        }
+
+        // Preserve stable React key so any focused input in this row NEVER unmounts or resets
+        clientKeyMapRef.current[realSet.id] = optimisticSetId;
+
+        // Swap only the temporary ID for the real DB ID while keeping any user edits made while in flight!
+        applyLocalWorkoutUpdate((w) => ({
+          ...w,
+          exercises: w.exercises.map((e) => {
+            if (e.id === we.id) {
+              return {
+                ...e,
+                sets: (e.sets || []).map((s) =>
+                  s.id === optimisticSetId ? { ...s, id: realSet.id } : s
+                ),
+              };
+            }
+            return e;
+          }),
+        }));
+
+        // Flush any edits the user made while the set still had a temporary ID
+        const pendingUpdates = pendingTempUpdatesRef.current[optimisticSetId];
+        if (pendingUpdates) {
+          delete pendingTempUpdatesRef.current[optimisticSetId];
+          await api.updateSet(realSet.id, pendingUpdates);
+        }
+      }
     } catch (err) {
       onWorkoutUpdated(previousWorkout);
       alert(err.message || 'Failed to add set');
-    }
-  };
-
-  const handleStartEditSet = (set) => {
-    setEditingSet({
-      id: set.id,
-      weight: set.weight.toString(),
-      reps: set.reps.toString(),
-      is_warmup: !!set.is_warmup,
-    });
-  };
-
-  const handleSaveEditSet = async () => {
-    if (!editingSet) return;
-    const previousWorkout = workout;
-    const updatedWeight = parseFloat(editingSet.weight);
-    const updatedReps = parseInt(editingSet.reps, 10);
-    const updatedWarmup = editingSet.is_warmup ? 1 : 0;
-
-    // Optimistic edit
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
-        ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === editingSet.id) {
-            return {
-              ...s,
-              weight: updatedWeight,
-              reps: updatedReps,
-              is_warmup: updatedWarmup,
-            };
-          }
-          return s;
-        }),
-      })),
-    };
-
-    onWorkoutUpdated(optimisticWorkout);
-    setEditingSet(null);
-
-    try {
-      const response = await api.updateSet(editingSet.id, {
-        weight: updatedWeight,
-        reps: updatedReps,
-        is_warmup: updatedWarmup,
-      });
-      onWorkoutUpdated(response.workout);
-    } catch (err) {
-      onWorkoutUpdated(previousWorkout);
-      alert(err.message || 'Failed to update set');
     }
   };
 
@@ -587,43 +529,36 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }));
   };
 
-  const handleStartEditNote = (set) => {
-    if (editingNoteSetId === set.id) {
-      setEditingNoteSetId(null);
-      setEditingNoteText('');
-    } else {
-      setEditingNoteSetId(set.id);
-      setEditingNoteText(set.notes || '');
-    }
-  };
-
-  const handleSaveSetNote = async (setId, text) => {
+  const handleSaveSetNote = async (set, text) => {
     const trimmed = text ? text.trim() : null;
-    const previousWorkout = workout;
+    const clientKey = clientKeyMapRef.current[set.id] || set.id;
+    const timerKey = `${clientKey}_notes`;
+    if (updateDebounceTimers.current[timerKey]) {
+      clearTimeout(updateDebounceTimers.current[timerKey]);
+    }
 
-    const optimisticWorkout = {
-      ...workout,
-      exercises: workout.exercises.map((e) => ({
+    applyLocalWorkoutUpdate((w) => ({
+      ...w,
+      exercises: w.exercises.map((e) => ({
         ...e,
-        sets: (e.sets || []).map((s) => {
-          if (s.id === setId) {
-            return { ...s, notes: trimmed };
-          }
-          return s;
-        }),
+        sets: (e.sets || []).map((s) =>
+          s.id === set.id ? { ...s, notes: trimmed } : s
+        ),
       })),
-    };
+    }));
 
-    onWorkoutUpdated(optimisticWorkout);
-    setEditingNoteSetId(null);
-    setEditingNoteText('');
+    if (String(set.id).startsWith('temp_')) {
+      pendingTempUpdatesRef.current[set.id] = {
+        ...(pendingTempUpdatesRef.current[set.id] || {}),
+        notes: trimmed,
+      };
+      return;
+    }
 
     try {
-      const response = await api.updateSet(setId, { notes: trimmed });
-      onWorkoutUpdated(response.workout);
+      await api.updateSet(set.id, { notes: trimmed });
     } catch (err) {
-      onWorkoutUpdated(previousWorkout);
-      alert(err.message || 'Failed to save note');
+      console.error('Failed to save note', err);
     }
   };
 
@@ -638,8 +573,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
   return (
     <div className="pb-28">
-      {/* Top Header Bar (Solid background, guaranteed clearance below notch/status bar) */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pb-3 pt-[max(calc(env(safe-area-inset-top,0px)+14px),64px)] flex items-center justify-between transition-colors shadow-xs">
+      {/* Top Header Bar (Non-floating, scrolls naturally with the workout page) */}
+      <div className="bg-white dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 px-4 pb-3 pt-[max(calc(env(safe-area-inset-top,0px)+14px),64px)] flex items-center justify-between transition-colors">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
@@ -700,8 +635,6 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
           </div>
         ) : (
           workout.exercises.map((we, idx) => {
-            const currentInput = getInputState(we);
-            const perf = lastPerformances[we.exercise_id];
             const isCollapsed = collapsedExercises[we.id] !== undefined ? collapsedExercises[we.id] : idx > 0;
             const totalSets = we.sets ? we.sets.length : 0;
             const completedSets = we.sets ? we.sets.filter((s) => !!s.completed_at).length : 0;
@@ -747,7 +680,31 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Subtle Reorder Up/Down Controls (shown when 2+ exercises exist) */}
+                    {workout.exercises.length > 1 && (
+                      <div className="flex items-center bg-slate-100/80 dark:bg-slate-800/80 rounded-xl p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveExercise(idx, -1)}
+                          disabled={idx === 0}
+                          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-25 active:scale-90 transition-all"
+                          title="Move exercise up"
+                        >
+                          <ArrowUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveExercise(idx, 1)}
+                          disabled={idx === workout.exercises.length - 1}
+                          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-25 active:scale-90 transition-all"
+                          title="Move exercise down"
+                        >
+                          <ArrowDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Swap / Replace button */}
                     <button
                       type="button"
@@ -767,7 +724,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           category: we.exercise_category,
                         })
                       }
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-xs"
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-blue-600 dark:text-blue-400 text-xs font-semibold rounded-xl flex items-center gap-1 active:scale-95 transition-all shadow-xs"
                       title="View chronological history for this exercise"
                     >
                       <History className="w-3.5 h-3.5" />
@@ -803,10 +760,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
                         {we.sets.map((s) => {
                           const isCompleted = !!s.completed_at;
+                          const rowKey = clientKeyMapRef.current[s.id] || s.id;
 
                           return (
                             <div
-                              key={s.id}
+                              key={rowKey}
                               className={`flex items-center gap-1.5 p-1.5 rounded-2xl transition-all ${
                                 hasStructuredSets && isCompleted
                                   ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
@@ -832,10 +790,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 ) : null}
                               </button>
 
-                              {/* Weight Input (Direct in set, auto-select on focus, debounced update) */}
+                              {/* Weight Input (Numeric decimal keypad) */}
                               <div className="w-16 shrink-0 text-center">
                                 <input
                                   type="number"
+                                  inputMode="decimal"
                                   step="0.5"
                                   value={s.weight ?? ''}
                                   onFocus={(e) => e.target.select()}
@@ -849,10 +808,12 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 />
                               </div>
 
-                              {/* Reps Input (Direct in set, auto-select on focus, debounced update, no 'r') */}
+                              {/* Reps Input (Numeric integer keypad) */}
                               <div className="w-12 shrink-0 text-center">
                                 <input
                                   type="number"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
                                   min="1"
                                   value={s.reps ?? ''}
                                   onFocus={(e) => e.target.select()}
@@ -866,18 +827,14 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 />
                               </div>
 
-                              {/* Comment Field (Ultra-compact 10px font, expands into reclaimed horizontal space) */}
+                              {/* Comment Field (Full text keyboard, controlled locally so it never resets) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
                                   type="text"
                                   placeholder="Comment..."
-                                  defaultValue={s.notes || ''}
-                                  key={`${s.id}_${s.notes || ''}`}
-                                  onBlur={(e) => {
-                                    if (e.target.value !== (s.notes || '')) {
-                                      handleSaveSetNote(s.id, e.target.value);
-                                    }
-                                  }}
+                                  value={s.notes ?? ''}
+                                  onChange={(e) => handleQuickUpdateSet(s, 'notes', e.target.value)}
+                                  onBlur={(e) => handleSaveSetNote(s, e.target.value)}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.target.blur();

@@ -395,10 +395,12 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                                   <div className="col-span-4">
                                     <input
                                       type="number"
+                                      inputMode="decimal"
                                       step="any"
                                       min="0"
                                       placeholder="0"
                                       value={s.weight ?? ''}
+                                      onFocus={(e) => e.target.select()}
                                       onChange={(e) => handleUpdateSet(idx, sIdx, 'weight', e.target.value)}
                                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-900 dark:text-white text-center font-mono focus:outline-none focus:border-blue-500"
                                     />
@@ -406,10 +408,13 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                                   <div className="col-span-3">
                                     <input
                                       type="number"
+                                      inputMode="numeric"
+                                      pattern="[0-9]*"
                                       min="1"
                                       max="999"
                                       placeholder="0"
                                       value={s.reps ?? ''}
+                                      onFocus={(e) => e.target.select()}
                                       onChange={(e) => handleUpdateSet(idx, sIdx, 'reps', e.target.value)}
                                       className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-900 dark:text-white text-center font-mono focus:outline-none focus:border-blue-500"
                                     />
