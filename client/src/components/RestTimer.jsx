@@ -162,14 +162,14 @@ export default function RestTimer() {
   // Visual alert banner when timer finishes
   if (isFinished) {
     return (
-      <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 bg-amber-500 text-slate-950 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl border border-amber-400 animate-pulse transition-all">
+      <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 h-12 bg-amber-500 text-slate-950 px-3.5 rounded-2xl flex items-center justify-between shadow-2xl border border-amber-400 animate-pulse transition-all">
         <div className="flex items-center gap-2">
           <BellRing className="w-4 h-4 text-slate-950 animate-bounce" />
-          <span className="text-xs font-semibold">Rest Complete! (2:00)</span>
+          <span className="text-sm font-bold leading-none">Rest Complete! (2:00)</span>
         </div>
         <button
           onClick={dismissAlert}
-          className="px-3 py-1 bg-slate-950 text-amber-300 text-xs font-medium rounded-xl active:scale-95 transition-transform"
+          className="px-3 py-1 bg-slate-950 text-amber-300 text-xs font-semibold rounded-xl active:scale-95 transition-transform"
         >
           Dismiss
         </button>
@@ -178,7 +178,7 @@ export default function RestTimer() {
   }
 
   return (
-    <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 px-4 py-2.5 rounded-2xl flex items-center justify-between shadow-2xl transition-all overflow-hidden">
+    <div className="fixed bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-80 z-30 h-12 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 px-3.5 rounded-2xl flex items-center justify-between shadow-2xl transition-all overflow-hidden">
       {/* Background progress fill */}
       {isRunning && (
         <div
@@ -198,11 +198,11 @@ export default function RestTimer() {
         >
           <Clock className="w-3.5 h-3.5" />
         </div>
-        <div>
-          <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mr-1.5">
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
             Rest
           </span>
-          <span className="font-mono text-base font-semibold text-slate-900 dark:text-white">
+          <span className="font-mono text-2xl font-bold leading-none tracking-tight tabular-nums text-slate-900 dark:text-white">
             {formatTime(timeLeft)}
           </span>
         </div>
@@ -213,7 +213,7 @@ export default function RestTimer() {
         {isRunning ? (
           <button
             onClick={togglePause}
-            className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all"
           >
             <Pause className="w-3 h-3 fill-current" />
             <span>Pause</span>
@@ -221,7 +221,7 @@ export default function RestTimer() {
         ) : timeLeft < DEFAULT_SECONDS && timeLeft > 0 ? (
           <button
             onClick={togglePause}
-            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-medium flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-semibold flex items-center gap-1 shadow-sm active:scale-95 transition-all"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>Resume</span>
@@ -229,7 +229,7 @@ export default function RestTimer() {
         ) : (
           <button
             onClick={startTimer}
-            className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+            className="px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
           >
             <Play className="w-3 h-3 fill-current" />
             <span>Start 2:00</span>
