@@ -225,9 +225,13 @@ async function initDb() {
           workout_id INTEGER NOT NULL REFERENCES workouts(id) ON DELETE CASCADE,
           exercise_id INTEGER NOT NULL REFERENCES exercises(id) ON DELETE RESTRICT,
           order_index INTEGER NOT NULL DEFAULT 0,
+          has_structured_sets INTEGER DEFAULT 0,
           notes TEXT
         );
       `);
+      try {
+        await db.execute('ALTER TABLE workout_exercises ADD COLUMN has_structured_sets INTEGER DEFAULT 0');
+      } catch (_) {}
 
       // 5. Workout sets
       await db.execute(`

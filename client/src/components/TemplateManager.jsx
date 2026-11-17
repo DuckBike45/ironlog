@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, X, Edit3, Trash2, Dumbbell, Play, Check, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
+import { Plus, X, Edit3, Trash2, Dumbbell, Play, Check, GripVertical, Sparkles } from 'lucide-react';
 import { api } from '../api';
 import ExerciseSelectorModal from './ExerciseSelectorModal';
+import { useDragReorder } from '../hooks/useDragReorder';
 
 export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
   const [templates, setTemplates] = useState([]);
@@ -152,14 +153,20 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
     setSelectedExercises((prev) => prev.filter((e) => e.id !== exerciseId));
   };
 
-  const handleMoveExercise = (index, delta) => {
-    const newIdx = index + delta;
-    if (newIdx < 0 || newIdx >= selectedExercises.length) return;
-    const list = [...selectedExercises];
-    const [moved] = list.splice(index, 1);
-    list.splice(newIdx, 0, moved);
-    setSelectedExercises(list);
+  const handleReorderExercises = (fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    setSelectedExercises((prev) => {
+      const list = [...prev];
+      const [moved] = list.splice(fromIndex, 1);
+      list.splice(toIndex, 0, moved);
+      return list;
+    });
   };
+
+  const { setItemRef, getHandleProps, getItemStyle } = useDragReorder(
+    selectedExercises.length,
+    handleReorderExercises
+  );
 
   const handleSaveTemplate = async (e) => {
     e.preventDefault();
@@ -296,10 +303,21 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                     {selectedExercises.map((ex, idx) => (
                       <div
                         key={ex.id}
+                        ref={setItemRef(idx)}
+                        style={getItemStyle(idx)}
                         className="p-3 rounded-2xl bg-slate-50/80 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 space-y-2.5 shadow-xs"
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            {selectedExercises.length > 1 && (
+                              <div
+                                {...getHandleProps(idx)}
+                                className="p-1 -ml-1 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing select-none shrink-0"
+                                title="Drag to reorder"
+                              >
+                                <GripVertical className="w-3.5 h-3.5" />
+                              </div>
+                            )}
                             <span className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center font-mono">
                               {idx + 1}
                             </span>
@@ -310,24 +328,6 @@ export default function TemplateManager({ isOpen, onClose, onStartTemplate }) {
                           </div>
 
                           <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleMoveExercise(idx, -1)}
-                              disabled={idx === 0}
-                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30"
-                              title="Move up"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleMoveExercise(idx, 1)}
-                              disabled={idx === selectedExercises.length - 1}
-                              className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-30"
-                              title="Move down"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
                             <button
                               type="button"
                               onClick={() => handleRemoveExerciseFromTemplate(ex.id)}

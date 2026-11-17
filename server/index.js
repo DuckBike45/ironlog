@@ -531,24 +531,36 @@ app.get('/api/exercises/:id/history', async (req, res) => {
     });
 
     const sessions = [];
-    for (const s of sessionsRes.rows) {
-      const setsRes = await db.execute({
+    if (sessionsRes.rows.length > 0) {
+      const weIds = sessionsRes.rows.map((s) => s.workout_exercise_id);
+      const placeholders = weIds.map(() => '?').join(',');
+      const allSetsRes = await db.execute({
         sql: `
-          SELECT id, set_number, weight, reps, is_warmup, completed_at, notes
+          SELECT id, workout_exercise_id, set_number, weight, reps, is_warmup, completed_at, notes
           FROM workout_sets
-          WHERE workout_exercise_id = ?
+          WHERE workout_exercise_id IN (${placeholders})
           ORDER BY set_number ASC
         `,
-        args: [s.workout_exercise_id],
+        args: weIds,
       });
 
-      sessions.push({
-        workout_id: s.workout_id,
-        workout_name: s.workout_name,
-        started_at: s.started_at,
-        completed_at: s.completed_at,
-        sets: setsRes.rows,
-      });
+      const setsByWeId = {};
+      for (const row of allSetsRes.rows) {
+        if (!setsByWeId[row.workout_exercise_id]) {
+          setsByWeId[row.workout_exercise_id] = [];
+        }
+        setsByWeId[row.workout_exercise_id].push(row);
+      }
+
+      for (const s of sessionsRes.rows) {
+        sessions.push({
+          workout_id: s.workout_id,
+          workout_name: s.workout_name,
+          started_at: s.started_at,
+          completed_at: s.completed_at,
+          sets: setsByWeId[s.workout_exercise_id] || [],
+        });
+      }
     }
 
     res.json({
@@ -722,24 +734,33 @@ app.get('/api/workouts', async (req, res) => {
 
     const workoutsRes = await db.execute({ sql: query, args });
 
-    const result = [];
-    for (const w of workoutsRes.rows) {
+    const namesByWorkoutId = {};
+    if (workoutsRes.rows.length > 0) {
+      const workoutIds = workoutsRes.rows.map((w) => w.id);
+      const placeholders = workoutIds.map(() => '?').join(',');
       const namesRes = await db.execute({
         sql: `
-          SELECT e.name
+          SELECT we.workout_id, e.name
           FROM workout_exercises we
           JOIN exercises e ON we.exercise_id = e.id
-          WHERE we.workout_id = ?
-          ORDER BY we.order_index ASC
+          WHERE we.workout_id IN (${placeholders})
+          ORDER BY we.order_index ASC, we.id ASC
         `,
-        args: [w.id],
+        args: workoutIds,
       });
 
-      result.push({
-        ...w,
-        exercise_names: namesRes.rows.map((r) => r.name),
-      });
+      for (const r of namesRes.rows) {
+        if (!namesByWorkoutId[r.workout_id]) {
+          namesByWorkoutId[r.workout_id] = [];
+        }
+        namesByWorkoutId[r.workout_id].push(r.name);
+      }
     }
+
+    const result = workoutsRes.rows.map((w) => ({
+      ...w,
+      exercise_names: namesByWorkoutId[w.id] || [],
+    }));
 
     res.json(result);
   } catch (err) {
@@ -785,7 +806,7 @@ app.post('/api/workouts/:id/exercises', async (req, res) => {
     const nextOrder = (maxOrderRes.rows.length ? Number(maxOrderRes.rows[0].max_order) : -1) + 1;
 
     await db.execute({
-      sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index) VALUES (?, ?, ?)',
+      sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index, has_structured_sets) VALUES (?, ?, ?, 0)',
       args: [workoutId, exercise_id, nextOrder],
     });
 
@@ -901,7 +922,7 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
     }
 
     const weRes = await db.execute({
-      sql: 'SELECT we.workout_id, w.has_structured_sets, w.completed_at FROM workout_exercises we JOIN workouts w ON we.workout_id = w.id WHERE we.id = ?',
+      sql: 'SELECT we.workout_id, we.has_structured_sets AS we_structured, w.completed_at FROM workout_exercises we JOIN workouts w ON we.workout_id = w.id WHERE we.id = ?',
       args: [workoutExerciseId],
     });
 
@@ -910,7 +931,7 @@ app.post('/api/workout-exercises/:id/sets', async (req, res) => {
     }
 
     const workoutId = weRes.rows[0].workout_id;
-    const isStructured = Number(weRes.rows[0].has_structured_sets) === 1;
+    const isStructured = Number(weRes.rows[0].we_structured) === 1;
     const workoutCompletedAt = weRes.rows[0].completed_at;
 
     let finalCompletedAt;
@@ -1095,13 +1116,16 @@ app.get('/api/templates', async (req, res) => {
 
     sql += ' ORDER BY created_at DESC';
     const tplRes = await db.execute({ sql, args });
-    const templates = [];
 
-    for (const t of tplRes.rows) {
+    const exByTemplateId = {};
+    if (tplRes.rows.length > 0) {
+      const templateIds = tplRes.rows.map((t) => t.id);
+      const placeholders = templateIds.map(() => '?').join(',');
       const exRes = await db.execute({
         sql: `
           SELECT 
             te.id,
+            te.template_id,
             te.exercise_id,
             te.order_index,
             te.target_sets,
@@ -1112,17 +1136,24 @@ app.get('/api/templates', async (req, res) => {
             e.category AS exercise_category
           FROM template_exercises te
           JOIN exercises e ON te.exercise_id = e.id
-          WHERE te.template_id = ?
+          WHERE te.template_id IN (${placeholders})
           ORDER BY te.order_index ASC, te.id ASC
         `,
-        args: [t.id],
+        args: templateIds,
       });
 
-      templates.push({
-        ...t,
-        exercises: exRes.rows,
-      });
+      for (const row of exRes.rows) {
+        if (!exByTemplateId[row.template_id]) {
+          exByTemplateId[row.template_id] = [];
+        }
+        exByTemplateId[row.template_id].push(row);
+      }
     }
+
+    const templates = tplRes.rows.map((t) => ({
+      ...t,
+      exercises: exByTemplateId[t.id] || [],
+    }));
 
     res.json(templates);
   } catch (err) {
@@ -1386,12 +1417,6 @@ app.post('/api/templates/:id/start', async (req, res) => {
     const workoutId = Number(workoutRes.lastInsertRowid);
 
     for (const te of teRes.rows) {
-      const weResult = await db.execute({
-        sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index) VALUES (?, ?, ?)',
-        args: [workoutId, te.exercise_id, te.order_index],
-      });
-      const workoutExerciseId = Number(weResult.lastInsertRowid);
-
       // 1. Check if sets_json has per-set baseline configuration
       let plannedSets = [];
       if (te.sets_json) {
@@ -1399,6 +1424,15 @@ app.post('/api/templates/:id/start', async (req, res) => {
           plannedSets = typeof te.sets_json === 'string' ? JSON.parse(te.sets_json) : te.sets_json;
         } catch (_) {}
       }
+
+      const targetSetsCount = parseInt(te.target_sets, 10) || 0;
+      const exerciseHasStructuredSets = (Array.isArray(plannedSets) && plannedSets.length > 0) || targetSetsCount > 0 ? 1 : 0;
+
+      const weResult = await db.execute({
+        sql: 'INSERT INTO workout_exercises (workout_id, exercise_id, order_index, has_structured_sets) VALUES (?, ?, ?, ?)',
+        args: [workoutId, te.exercise_id, te.order_index, exerciseHasStructuredSets],
+      });
+      const workoutExerciseId = Number(weResult.lastInsertRowid);
 
       if (Array.isArray(plannedSets) && plannedSets.length > 0) {
         for (let sIdx = 0; sIdx < plannedSets.length; sIdx++) {
@@ -1413,18 +1447,14 @@ app.post('/api/templates/:id/start', async (req, res) => {
             args: [workoutExerciseId, setNumber, weight, reps, isWarmup, null],
           });
         }
-      } else {
-        // Fallback for target_sets count
-        const targetSetsCount = parseInt(te.target_sets, 10) || 0;
-        if (targetSetsCount > 0) {
-          const defaultReps = te.target_reps != null ? parseInt(te.target_reps, 10) : 0;
-          const defaultWeight = te.target_weight != null ? parseFloat(te.target_weight) : 0;
-          for (let setIdx = 1; setIdx <= targetSetsCount; setIdx++) {
-            await db.execute({
-              sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
-              args: [workoutExerciseId, setIdx, defaultWeight, defaultReps, 0, null],
-            });
-          }
+      } else if (targetSetsCount > 0) {
+        const defaultReps = te.target_reps != null ? parseInt(te.target_reps, 10) : 0;
+        const defaultWeight = te.target_weight != null ? parseFloat(te.target_weight) : 0;
+        for (let setIdx = 1; setIdx <= targetSetsCount; setIdx++) {
+          await db.execute({
+            sql: 'INSERT INTO workout_sets (workout_exercise_id, set_number, weight, reps, is_warmup, completed_at) VALUES (?, ?, ?, ?, ?, ?)',
+            args: [workoutExerciseId, setIdx, defaultWeight, defaultReps, 0, null],
+          });
         }
       }
     }
@@ -1453,6 +1483,7 @@ async function getFullWorkoutDetails(workoutId) {
         we.workout_id,
         we.exercise_id,
         we.order_index,
+        we.has_structured_sets,
         we.notes,
         e.name AS exercise_name,
         e.category AS exercise_category

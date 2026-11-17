@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Plus, Check, Trash2, Edit3, X, Dumbbell, History, 
-  ChevronDown, ChevronUp, ArrowUp, ArrowDown, AlertTriangle, Sparkles, ArrowLeftRight, MessageSquare 
+  Plus, Check, Trash2, X, Dumbbell, History, 
+  ChevronDown, ChevronUp, GripVertical, ArrowLeftRight
 } from 'lucide-react';
 import { api } from '../api';
 import RestTimer from './RestTimer';
 import ExerciseSelectorModal from './ExerciseSelectorModal';
 import ExerciseHistoryModal from './ExerciseHistoryModal';
+import KeyboardNavBar from './KeyboardNavBar';
+import { useDragReorder } from '../hooks/useDragReorder';
+import { useWakeLock } from '../hooks/useWakeLock';
 
 // Isolated Timer Component: Only this tiny component re-renders every 1s, preventing the entire workout tree from re-rendering
 function WorkoutDuration({ startedAt }) {
@@ -48,54 +51,64 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
   const [historyModalExercise, setHistoryModalExercise] = useState(null);
   const [replacingExercise, setReplacingExercise] = useState(null);
 
-  // Structured workouts have pre-configured target sets from a template.
-  // Blank / ad-hoc workouts auto-complete sets immediately without requiring or showing a checkmark.
-  const hasStructuredSets = Boolean(
-    workout.has_structured_sets === 1 ||
-    workout.has_structured_sets === true ||
-    (workout.template_id && workout.has_structured_sets === undefined && workout.exercises?.some((e) => e.sets?.some((s) => !s.completed_at)))
-  );
+  // Per-exercise structured check:
+  // Only exercises created from a template WITH pre-defined target sets show the checkmark.
+  // Blank workouts, templates without pre-defined sets, and mid-workout added exercises auto-complete sets on + Add Set.
+  const isExerciseStructured = (we) => {
+    if (!we) return false;
+    if (we.has_structured_sets !== undefined && we.has_structured_sets !== null) {
+      return Number(we.has_structured_sets) === 1 || we.has_structured_sets === true;
+    }
+    // Legacy fallback for workouts created before per-exercise flag existed
+    return Boolean(
+      (workout.has_structured_sets === 1 || workout.has_structured_sets === true) &&
+      we.sets?.some((s) => !s.completed_at)
+    );
+  };
 
-  // Screen Wake Lock: keeps display awake during active workouts
-  const [wakeLockActive, setWakeLockActive] = useState(false);
-  const wakeLockRef = useRef(null);
+  // Screen Wake Lock with automatic re-acquire + silent inline video fallback
+  const { wakeLockActive, enableWakeLock } = useWakeLock();
 
-  useEffect(() => {
-    let isMounted = true;
+  // Keyboard navigation state for Weight -> Reps -> Comment
+  const [focusedInput, setFocusedInput] = useState(null); // { rowKey, field }
+  const inputRefsRef = useRef({});
+  const setInputRef = (rowKey, field) => (el) => {
+    const key = `${rowKey}_${field}`;
+    if (el) inputRefsRef.current[key] = el;
+    else delete inputRefsRef.current[key];
+  };
 
-    const requestWakeLock = async () => {
-      try {
-        if ('wakeLock' in navigator && document.visibilityState === 'visible') {
-          wakeLockRef.current = await navigator.wakeLock.request('screen');
-          if (isMounted) setWakeLockActive(true);
-          wakeLockRef.current.addEventListener('release', () => {
-            if (isMounted) setWakeLockActive(false);
-          });
-        }
-      } catch (err) {
-        if (isMounted) setWakeLockActive(false);
+  const focusField = (rowKey, field) => {
+    const el = inputRefsRef.current[`${rowKey}_${field}`];
+    if (el) {
+      el.focus();
+      if (typeof el.select === 'function' && field !== 'notes') {
+        el.select();
       }
-    };
+    }
+  };
 
-    requestWakeLock();
+  const handleKeyboardStep = (direction) => {
+    if (!focusedInput) return;
+    const order = ['weight', 'reps', 'notes'];
+    const idx = order.indexOf(focusedInput.field);
+    const nextIdx = idx + direction;
+    if (nextIdx >= 0 && nextIdx < order.length) {
+      focusField(focusedInput.rowKey, order[nextIdx]);
+    } else if (nextIdx >= order.length) {
+      const el = inputRefsRef.current[`${focusedInput.rowKey}_${focusedInput.field}`];
+      if (el) el.blur();
+      setFocusedInput(null);
+    }
+  };
 
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        requestWakeLock();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      isMounted = false;
-      document.removeEventListener('visibilitychange', handleVisibility);
-      if (wakeLockRef.current) {
-        wakeLockRef.current.release().catch(() => {});
-        wakeLockRef.current = null;
-      }
-    };
-  }, []);
+  const handleKeyboardDone = () => {
+    if (focusedInput) {
+      const el = inputRefsRef.current[`${focusedInput.rowKey}_${focusedInput.field}`];
+      if (el) el.blur();
+    }
+    setFocusedInput(null);
+  };
 
   // Map of exerciseId -> { loading, found, sets, workout }
   const [lastPerformances, setLastPerformances] = useState({});
@@ -188,14 +201,13 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
     }
   };
 
-  const handleMoveExercise = async (index, direction) => {
+  const handleReorderExercises = async (fromIndex, toIndex) => {
     const currentExercises = [...(latestWorkoutRef.current.exercises || [])];
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= currentExercises.length) return;
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
 
     const previousWorkout = latestWorkoutRef.current;
-    const [moved] = currentExercises.splice(index, 1);
-    currentExercises.splice(targetIndex, 0, moved);
+    const [moved] = currentExercises.splice(fromIndex, 1);
+    currentExercises.splice(toIndex, 0, moved);
 
     const reordered = currentExercises.map((ex, idx) => ({
       ...ex,
@@ -217,6 +229,11 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       alert(err.message || 'Failed to reorder exercises');
     }
   };
+
+  const { setItemRef, getHandleProps, getItemStyle } = useDragReorder(
+    workout.exercises?.length || 0,
+    handleReorderExercises
+  );
 
   const handleRemoveExercise = async (workoutExerciseId) => {
     if (!window.confirm('Remove this exercise from your workout?')) return;
@@ -441,7 +458,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
 
     const nextSetNumber = existingSets.length + 1;
     const optimisticSetId = 'temp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-    const setCompletedAt = hasStructuredSets ? null : new Date().toISOString();
+    const structured = isExerciseStructured(currentWe);
+    const setCompletedAt = structured ? null : new Date().toISOString();
 
     const optimisticSet = {
       id: optimisticSetId,
@@ -468,8 +486,8 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
       }),
     }));
 
-    // If ad-hoc / free workout, auto-completing the set immediately starts the rest timer
-    if (!hasStructuredSets) {
+    // If unstructured (no pre-defined target sets), auto-completing the set immediately starts the rest timer
+    if (!structured) {
       window.dispatchEvent(new CustomEvent('ironlog:start-rest'));
     }
 
@@ -580,11 +598,21 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
               Active Workout
             </span>
-            {wakeLockActive && (
+            {wakeLockActive ? (
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 flex items-center gap-1 shadow-xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Screen On
               </span>
+            ) : (
+              <button
+                type="button"
+                onClick={enableWakeLock}
+                className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 flex items-center gap-1 shadow-xs active:scale-95 transition-transform"
+                title="Tap to keep screen awake"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Tap for Screen On
+              </button>
             )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
@@ -638,72 +666,63 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
             const isCollapsed = collapsedExercises[we.id] !== undefined ? collapsedExercises[we.id] : idx > 0;
             const totalSets = we.sets ? we.sets.length : 0;
             const completedSets = we.sets ? we.sets.filter((s) => !!s.completed_at).length : 0;
+            const exerciseStructured = isExerciseStructured(we);
 
             return (
               <div
                 key={we.id}
+                ref={setItemRef(idx)}
+                style={getItemStyle(idx)}
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800/90 rounded-3xl p-4 shadow-sm space-y-3"
               >
                 {/* Exercise Header */}
                 <div className="flex items-start justify-between gap-2">
-                  <div
-                    className="flex-1 cursor-pointer select-none"
-                    onClick={() => toggleExerciseCollapse(we.id, isCollapsed)}
-                  >
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                        {we.exercise_name}
-                      </h3>
-                      {isCollapsed ? (
-                        <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-                      ) : (
-                        <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-medium tracking-wide">
-                        {we.exercise_category}
-                      </span>
-                      {totalSets > 0 && (
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            hasStructuredSets
-                              ? (completedSets === totalSets
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                  : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800')
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {hasStructuredSets ? `${completedSets}/${totalSets} sets` : `${totalSets} ${totalSets === 1 ? 'set' : 'sets'}`}
+                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                    {workout.exercises.length > 1 && (
+                      <div
+                        {...getHandleProps(idx)}
+                        className="mt-0.5 p-1 -ml-1 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing select-none shrink-0"
+                        title="Drag to reorder"
+                      >
+                        <GripVertical className="w-4 h-4" />
+                      </div>
+                    )}
+                    <div
+                      className="flex-1 min-w-0 cursor-pointer select-none"
+                      onClick={() => toggleExerciseCollapse(we.id, isCollapsed)}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate">
+                          {we.exercise_name}
+                        </h3>
+                        {isCollapsed ? (
+                          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
+                        ) : (
+                          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="inline-block px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-medium tracking-wide">
+                          {we.exercise_category}
                         </span>
-                      )}
+                        {totalSets > 0 && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              exerciseStructured
+                                ? (completedSets === totalSets
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                    : 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800')
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                            }`}
+                          >
+                            {exerciseStructured ? `${completedSets}/${totalSets} sets` : `${totalSets} ${totalSets === 1 ? 'set' : 'sets'}`}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">
-                    {/* Subtle Reorder Up/Down Controls (shown when 2+ exercises exist) */}
-                    {workout.exercises.length > 1 && (
-                      <div className="flex items-center bg-slate-100/80 dark:bg-slate-800/80 rounded-xl p-0.5">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveExercise(idx, -1)}
-                          disabled={idx === 0}
-                          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-25 active:scale-90 transition-all"
-                          title="Move exercise up"
-                        >
-                          <ArrowUp className="w-3 h-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveExercise(idx, 1)}
-                          disabled={idx === workout.exercises.length - 1}
-                          className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white disabled:opacity-25 active:scale-90 transition-all"
-                          title="Move exercise down"
-                        >
-                          <ArrowDown className="w-3 h-3" />
-                        </button>
-                      </div>
-                    )}
 
                     {/* Swap / Replace button */}
                     <button
@@ -751,7 +770,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                           <div className="w-16 shrink-0 text-center">Weight</div>
                           <div className="w-12 shrink-0 text-center">Reps</div>
                           <div className="flex-1 min-w-[70px] pl-1">Comment</div>
-                          {hasStructuredSets ? (
+                          {exerciseStructured ? (
                             <div className="w-12 shrink-0 text-right pr-0.5">Done</div>
                           ) : (
                             <div className="w-6 shrink-0 text-right pr-0.5"></div>
@@ -766,7 +785,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                             <div
                               key={rowKey}
                               className={`flex items-center gap-1.5 p-1.5 rounded-2xl transition-all ${
-                                hasStructuredSets && isCompleted
+                                exerciseStructured && isCompleted
                                   ? 'bg-emerald-50 dark:bg-emerald-500/15 border border-emerald-200 dark:border-emerald-500/30 text-emerald-950 dark:text-emerald-100'
                                   : s.is_warmup
                                   ? 'bg-amber-50 dark:bg-amber-500/15 border border-amber-200 dark:border-amber-500/30 text-amber-950 dark:text-amber-100'
@@ -780,7 +799,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                                 className="w-7 shrink-0 flex items-center justify-center gap-0.5 font-mono font-semibold text-xs active:scale-95 transition-transform"
                                 title={s.is_warmup ? 'Warmup set (tap to make working set)' : 'Working set (tap to make warmup)'}
                               >
-                                <span className={hasStructuredSets && isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
+                                <span className={exerciseStructured && isCompleted ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-600 dark:text-slate-300'}>
                                   #{s.set_number}
                                 </span>
                                 {s.is_warmup ? (
@@ -793,15 +812,29 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                               {/* Weight Input (Numeric decimal keypad) */}
                               <div className="w-16 shrink-0 text-center">
                                 <input
+                                  ref={setInputRef(rowKey, 'weight')}
                                   type="number"
                                   inputMode="decimal"
+                                  enterKeyHint="next"
                                   step="0.5"
                                   value={s.weight ?? ''}
-                                  onFocus={(e) => e.target.select()}
+                                  onFocus={(e) => {
+                                    e.target.select();
+                                    setFocusedInput({ rowKey, field: 'weight' });
+                                  }}
                                   onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
-                                  onBlur={(e) => handleBlurSet(s, 'weight', e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      focusField(rowKey, 'reps');
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    handleBlurSet(s, 'weight', e.target.value);
+                                    setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'weight' ? null : prev));
+                                  }}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
-                                    hasStructuredSets && isCompleted
+                                    exerciseStructured && isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
                                       : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
                                   }`}
@@ -811,16 +844,30 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                               {/* Reps Input (Numeric integer keypad) */}
                               <div className="w-12 shrink-0 text-center">
                                 <input
+                                  ref={setInputRef(rowKey, 'reps')}
                                   type="number"
                                   inputMode="numeric"
                                   pattern="[0-9]*"
+                                  enterKeyHint="next"
                                   min="1"
                                   value={s.reps ?? ''}
-                                  onFocus={(e) => e.target.select()}
+                                  onFocus={(e) => {
+                                    e.target.select();
+                                    setFocusedInput({ rowKey, field: 'reps' });
+                                  }}
                                   onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
-                                  onBlur={(e) => handleBlurSet(s, 'reps', e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      focusField(rowKey, 'notes');
+                                    }
+                                  }}
+                                  onBlur={(e) => {
+                                    handleBlurSet(s, 'reps', e.target.value);
+                                    setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'reps' ? null : prev));
+                                  }}
                                   className={`w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-sm focus:outline-none focus:border-blue-500 transition-colors ${
-                                    hasStructuredSets && isCompleted
+                                    exerciseStructured && isCompleted
                                       ? 'bg-white/60 dark:bg-slate-900/40 border border-emerald-300/80 dark:border-emerald-600/40 text-emerald-950 dark:text-emerald-100'
                                       : 'bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white'
                                   }`}
@@ -830,18 +877,24 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                               {/* Comment Field (Full text keyboard, controlled locally so it never resets) */}
                               <div className="flex-1 min-w-[70px]">
                                 <input
+                                  ref={setInputRef(rowKey, 'notes')}
                                   type="text"
+                                  enterKeyHint="done"
                                   placeholder="Comment..."
                                   value={s.notes ?? ''}
+                                  onFocus={() => setFocusedInput({ rowKey, field: 'notes' })}
                                   onChange={(e) => handleQuickUpdateSet(s, 'notes', e.target.value)}
-                                  onBlur={(e) => handleSaveSetNote(s, e.target.value)}
+                                  onBlur={(e) => {
+                                    handleSaveSetNote(s, e.target.value);
+                                    setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'notes' ? null : prev));
+                                  }}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.target.blur();
                                     }
                                   }}
                                   className={`w-full rounded-lg py-1 px-1.5 text-[10px] text-slate-900 dark:text-white placeholder:text-[9px] placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:bg-white dark:focus:bg-slate-900 transition-colors ${
-                                    hasStructuredSets && isCompleted
+                                    exerciseStructured && isCompleted
                                       ? 'bg-white/50 dark:bg-slate-900/30 border border-emerald-200/60 dark:border-emerald-700/40'
                                       : 'bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-700/80 hover:bg-white dark:hover:bg-slate-900'
                                   }`}
@@ -849,7 +902,7 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
                               </div>
 
                               {/* Actions: Compact Checkmark & Delete (Structured) or Delete Only (Free) */}
-                              {hasStructuredSets ? (
+                              {exerciseStructured ? (
                                 <div className="w-12 shrink-0 flex items-center justify-end gap-1">
                                   <button
                                     type="button"
@@ -1002,6 +1055,17 @@ export default function ActiveWorkout({ workout, onWorkoutUpdated, onFinishWorko
         exerciseId={historyModalExercise?.id}
         exerciseName={historyModalExercise?.name}
         exerciseCategory={historyModalExercise?.category}
+      />
+
+      {/* Keyboard Navigation Bar (Weight -> Reps -> Comment -> Done) */}
+      <KeyboardNavBar
+        visible={Boolean(focusedInput)}
+        currentField={focusedInput?.field}
+        canPrev={focusedInput ? focusedInput.field !== 'weight' : false}
+        canNext={focusedInput ? focusedInput.field !== 'notes' : false}
+        onPrev={() => handleKeyboardStep(-1)}
+        onNext={() => handleKeyboardStep(1)}
+        onDone={handleKeyboardDone}
       />
     </div>
   );

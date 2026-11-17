@@ -7,12 +7,13 @@ import {
   Edit3,
   Check,
   Plus,
-  ArrowUp,
-  ArrowDown,
+  GripVertical,
   ArrowLeftRight,
 } from 'lucide-react';
 import { api } from '../api';
 import ExerciseSelectorModal from './ExerciseSelectorModal';
+import KeyboardNavBar from './KeyboardNavBar';
+import { useDragReorder } from '../hooks/useDragReorder';
 
 export default function WorkoutHistory() {
   const [history, setHistory] = useState([]);
@@ -41,14 +42,54 @@ export default function WorkoutHistory() {
     return next;
   };
 
+  const [focusedInput, setFocusedInput] = useState(null);
+  const inputRefsRef = useRef({});
+  const setInputRef = (rowKey, field) => (el) => {
+    const key = `${rowKey}_${field}`;
+    if (el) inputRefsRef.current[key] = el;
+    else delete inputRefsRef.current[key];
+  };
+
+  const focusField = (rowKey, field) => {
+    const el = inputRefsRef.current[`${rowKey}_${field}`];
+    if (el) {
+      el.focus();
+      if (typeof el.select === 'function' && field !== 'notes') {
+        el.select();
+      }
+    }
+  };
+
+  const handleKeyboardStep = (direction) => {
+    if (!focusedInput) return;
+    const order = ['weight', 'reps', 'notes'];
+    const idx = order.indexOf(focusedInput.field);
+    const nextIdx = idx + direction;
+    if (nextIdx >= 0 && nextIdx < order.length) {
+      focusField(focusedInput.rowKey, order[nextIdx]);
+    } else if (nextIdx >= order.length) {
+      const el = inputRefsRef.current[`${focusedInput.rowKey}_${focusedInput.field}`];
+      if (el) el.blur();
+      setFocusedInput(null);
+    }
+  };
+
+  const handleKeyboardDone = () => {
+    if (focusedInput) {
+      const el = inputRefsRef.current[`${focusedInput.rowKey}_${focusedInput.field}`];
+      if (el) el.blur();
+    }
+    setFocusedInput(null);
+  };
+
   useEffect(() => {
     loadHistory();
   }, []);
 
-  const loadHistory = async () => {
+  const loadHistory = async (forceRefresh = false) => {
     try {
       setLoading(true);
-      const data = await api.getWorkoutHistory();
+      const data = await api.getWorkoutHistory(forceRefresh);
       setHistory(data);
     } catch (err) {
       console.error('Failed to load history', err);
@@ -74,16 +115,18 @@ export default function WorkoutHistory() {
   const handleCloseDetail = () => {
     setSelectedWorkout(null);
     setIsEditing(false);
+    setFocusedInput(null);
     if (hasEdited) {
-      loadHistory();
+      loadHistory(true);
       setHasEdited(false);
     }
   };
 
   const handleToggleEditMode = () => {
     if (isEditing && hasEdited) {
-      loadHistory();
+      loadHistory(true);
     }
+    setFocusedInput(null);
     setIsEditing((prev) => !prev);
   };
 
@@ -146,16 +189,14 @@ export default function WorkoutHistory() {
     }
   };
 
-  const handleMoveExercise = async (index, direction) => {
+  const handleReorderExercises = async (fromIndex, toIndex) => {
     const current = latestWorkoutRef.current;
-    if (!current) return;
+    if (!current || fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
     const exercises = [...(current.exercises || [])];
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= exercises.length) return;
 
     const previous = current;
-    const [moved] = exercises.splice(index, 1);
-    exercises.splice(targetIndex, 0, moved);
+    const [moved] = exercises.splice(fromIndex, 1);
+    exercises.splice(toIndex, 0, moved);
 
     const reordered = exercises.map((ex, idx) => ({
       ...ex,
@@ -177,6 +218,11 @@ export default function WorkoutHistory() {
       alert(err.message || 'Failed to reorder exercises');
     }
   };
+
+  const { setItemRef, getHandleProps, getItemStyle } = useDragReorder(
+    selectedWorkout?.exercises?.length || 0,
+    handleReorderExercises
+  );
 
   const handleRemoveExercise = async (workoutExerciseId) => {
     if (!window.confirm('Remove this exercise and its sets from this workout?')) return;
@@ -642,42 +688,33 @@ export default function WorkoutHistory() {
                 selectedWorkout.exercises.map((we, idx) => (
                   <div
                     key={we.id}
+                    ref={setItemRef(idx)}
+                    style={isEditing ? getItemStyle(idx) : undefined}
                     className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 space-y-2.5"
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="font-semibold text-slate-900 dark:text-white text-sm block truncate">
-                          {we.exercise_name}
-                        </span>
-                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-200/70 dark:bg-slate-800 rounded inline-block mt-0.5">
-                          {we.exercise_category}
-                        </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {isEditing && selectedWorkout.exercises.length > 1 && (
+                          <div
+                            {...getHandleProps(idx)}
+                            className="p-1 -ml-1 text-slate-300 dark:text-slate-600 hover:text-slate-500 dark:hover:text-slate-400 cursor-grab active:cursor-grabbing select-none shrink-0"
+                            title="Drag to reorder"
+                          >
+                            <GripVertical className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <span className="font-semibold text-slate-900 dark:text-white text-sm block truncate">
+                            {we.exercise_name}
+                          </span>
+                          <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 px-2 py-0.5 bg-slate-200/70 dark:bg-slate-800 rounded inline-block mt-0.5">
+                            {we.exercise_category}
+                          </span>
+                        </div>
                       </div>
 
                       {isEditing && (
                         <div className="flex items-center gap-1 shrink-0">
-                          {selectedWorkout.exercises.length > 1 && (
-                            <div className="flex items-center bg-slate-200/70 dark:bg-slate-800 rounded-lg p-0.5">
-                              <button
-                                type="button"
-                                onClick={() => handleMoveExercise(idx, -1)}
-                                disabled={idx === 0}
-                                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-25"
-                                title="Move up"
-                              >
-                                <ArrowUp className="w-3 h-3" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleMoveExercise(idx, 1)}
-                                disabled={idx === selectedWorkout.exercises.length - 1}
-                                className="p-1 text-slate-500 hover:text-slate-900 dark:hover:text-white disabled:opacity-25"
-                                title="Move down"
-                              >
-                                <ArrowDown className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
                           <button
                             type="button"
                             onClick={() => setReplacingExercise(we)}
@@ -738,38 +775,72 @@ export default function WorkoutHistory() {
 
                                   <div className="w-16 shrink-0">
                                     <input
+                                      ref={setInputRef(rowKey, 'weight')}
                                       type="number"
                                       inputMode="decimal"
+                                      enterKeyHint="next"
                                       step="0.5"
                                       value={s.weight ?? ''}
-                                      onFocus={(e) => e.target.select()}
+                                      onFocus={(e) => {
+                                        e.target.select();
+                                        setFocusedInput({ rowKey, field: 'weight' });
+                                      }}
                                       onChange={(e) => handleQuickUpdateSet(s, 'weight', e.target.value)}
-                                      onBlur={(e) => handleBlurSet(s, 'weight', e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          focusField(rowKey, 'reps');
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        handleBlurSet(s, 'weight', e.target.value);
+                                        setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'weight' ? null : prev));
+                                      }}
                                       className="w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                                     />
                                   </div>
 
                                   <div className="w-12 shrink-0">
                                     <input
+                                      ref={setInputRef(rowKey, 'reps')}
                                       type="number"
                                       inputMode="numeric"
                                       pattern="[0-9]*"
+                                      enterKeyHint="next"
                                       min="1"
                                       value={s.reps ?? ''}
-                                      onFocus={(e) => e.target.select()}
+                                      onFocus={(e) => {
+                                        e.target.select();
+                                        setFocusedInput({ rowKey, field: 'reps' });
+                                      }}
                                       onChange={(e) => handleQuickUpdateSet(s, 'reps', e.target.value)}
-                                      onBlur={(e) => handleBlurSet(s, 'reps', e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          focusField(rowKey, 'notes');
+                                        }
+                                      }}
+                                      onBlur={(e) => {
+                                        handleBlurSet(s, 'reps', e.target.value);
+                                        setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'reps' ? null : prev));
+                                      }}
                                       className="w-full rounded-lg py-1 px-1 text-center font-mono font-bold text-xs bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-blue-500"
                                     />
                                   </div>
 
                                   <div className="flex-1 min-w-[60px]">
                                     <input
+                                      ref={setInputRef(rowKey, 'notes')}
                                       type="text"
+                                      enterKeyHint="done"
                                       placeholder="Comment..."
                                       value={s.notes ?? ''}
+                                      onFocus={() => setFocusedInput({ rowKey, field: 'notes' })}
                                       onChange={(e) => handleQuickUpdateSet(s, 'notes', e.target.value)}
-                                      onBlur={(e) => handleSaveSetNote(s, e.target.value)}
+                                      onBlur={(e) => {
+                                        handleSaveSetNote(s, e.target.value);
+                                        setFocusedInput((prev) => (prev?.rowKey === rowKey && prev?.field === 'notes' ? null : prev));
+                                      }}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') e.target.blur();
                                       }}
@@ -874,6 +945,17 @@ export default function WorkoutHistory() {
         isOpen={Boolean(replacingExercise)}
         onClose={() => setReplacingExercise(null)}
         onSelect={handleSwapExercise}
+      />
+
+      {/* Keyboard Navigation Bar in Edit Mode */}
+      <KeyboardNavBar
+        visible={Boolean(isEditing && focusedInput)}
+        currentField={focusedInput?.field}
+        canPrev={focusedInput ? focusedInput.field !== 'weight' : false}
+        canNext={focusedInput ? focusedInput.field !== 'notes' : false}
+        onPrev={() => handleKeyboardStep(-1)}
+        onNext={() => handleKeyboardStep(1)}
+        onDone={handleKeyboardDone}
       />
     </div>
   );

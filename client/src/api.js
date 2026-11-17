@@ -31,13 +31,19 @@ async function request(endpoint, options = {}) {
 
 let exercisesCache = null;
 let exercisesCachePromise = null;
+let templatesCache = null;
+let templatesCachePromise = null;
+let historyCache = null;
+let historyCachePromise = null;
 
 export const api = {
   // Session & User Context
   setUserId: (id) => {
     currentUserId = id;
-    // Invalidate exercise cache if user changes
+    // Invalidate per-user caches if user changes
     exercisesCache = null;
+    templatesCache = null;
+    historyCache = null;
   },
 
   getUserId: () => currentUserId,
@@ -115,27 +121,50 @@ export const api = {
   getExerciseHistory: (exerciseId) =>
     request(`/exercises/${exerciseId}/history`),
 
-  // Templates
-  getTemplates: () => request('/templates'),
+  // Templates (Cached in-memory for instant tab/modal load)
+  getTemplates: async (forceRefresh = false) => {
+    if (!forceRefresh && templatesCache) {
+      return templatesCache;
+    }
+    if (!templatesCachePromise) {
+      templatesCachePromise = request('/templates')
+        .then((data) => {
+          templatesCache = data;
+          templatesCachePromise = null;
+          return data;
+        })
+        .catch((err) => {
+          templatesCachePromise = null;
+          throw err;
+        });
+    }
+    return templatesCachePromise;
+  },
 
   getTemplate: (id) => request(`/templates/${id}`),
 
-  createTemplate: (data) =>
-    request('/templates', {
+  createTemplate: async (data) => {
+    templatesCache = null;
+    return request('/templates', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
-  updateTemplate: (id, data) =>
-    request(`/templates/${id}`, {
+  updateTemplate: async (id, data) => {
+    templatesCache = null;
+    return request(`/templates/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
-  deleteTemplate: (id) =>
-    request(`/templates/${id}`, {
+  deleteTemplate: async (id) => {
+    templatesCache = null;
+    return request(`/templates/${id}`, {
       method: 'DELETE',
-    }),
+    });
+  },
 
   startWorkoutFromTemplate: (id) =>
     request(`/templates/${id}/start`, {
@@ -151,24 +180,51 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
 
-  finishWorkout: (id, notes = '') =>
-    request(`/workouts/${id}/finish`, {
+  finishWorkout: async (id, notes = '') => {
+    historyCache = null;
+    return request(`/workouts/${id}/finish`, {
       method: 'POST',
       body: JSON.stringify({ notes }),
-    }),
+    });
+  },
 
-  discardWorkout: (id) =>
-    request(`/workouts/${id}`, {
+  discardWorkout: async (id) => {
+    historyCache = null;
+    return request(`/workouts/${id}`, {
       method: 'DELETE',
-    }),
+    });
+  },
 
-  updateWorkout: (id, data) =>
-    request(`/workouts/${id}`, {
+  updateWorkout: async (id, data) => {
+    historyCache = null;
+    return request(`/workouts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    }),
+    });
+  },
 
-  getWorkoutHistory: () => request('/workouts'),
+  getWorkoutHistory: async (forceRefresh = false) => {
+    if (!forceRefresh && historyCache) {
+      return historyCache;
+    }
+    if (!historyCachePromise) {
+      historyCachePromise = request('/workouts')
+        .then((data) => {
+          historyCache = data;
+          historyCachePromise = null;
+          return data;
+        })
+        .catch((err) => {
+          historyCachePromise = null;
+          throw err;
+        });
+    }
+    return historyCachePromise;
+  },
+
+  invalidateHistoryCache: () => {
+    historyCache = null;
+  },
 
   getWorkoutDetails: (id) => request(`/workouts/${id}`),
 
