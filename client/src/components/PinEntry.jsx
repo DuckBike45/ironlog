@@ -8,6 +8,11 @@ export default function PinEntry({ onSuccess, theme, onToggleTheme }) {
   const [shaking, setShaking] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Warm up serverless function & DB connection while user enters PIN
+  useEffect(() => {
+    fetch('/api/health').catch(() => {});
+  }, []);
+
   // Auto-submit when 6 digits are entered
   useEffect(() => {
     if (pin.length === 6) {
@@ -21,7 +26,7 @@ export default function PinEntry({ onSuccess, theme, onToggleTheme }) {
       setError('');
       const res = await api.verifyPin(enteredPin);
       if (res.mode === 'family') {
-        onSuccess({ mode: 'family' });
+        onSuccess({ mode: 'family', users: res.users });
       } else if (res.mode === 'demo') {
         onSuccess({ mode: 'demo', user: res.user });
       }

@@ -46,7 +46,8 @@ app.post('/api/auth/verify', async (req, res) => {
     const demoPin = process.env.DEMO_PIN || '000000';
 
     if (String(pin).trim() === String(familyPin).trim()) {
-      return res.json({ mode: 'family' });
+      const usersRes = await db.execute('SELECT id, name, created_at FROM users WHERE is_demo = 0 ORDER BY id ASC');
+      return res.json({ mode: 'family', users: usersRes.rows });
     }
 
     if (String(pin).trim() === String(demoPin).trim()) {

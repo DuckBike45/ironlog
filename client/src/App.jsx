@@ -27,6 +27,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [templates, setTemplates] = useState([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [prefetchedUsers, setPrefetchedUsers] = useState(null);
 
   // Theme state: defaults to 'light'
   const [theme, setTheme] = useState(() => {
@@ -96,12 +97,15 @@ export default function App() {
   };
 
   // Auth Handlers
-  const handlePinSuccess = ({ mode, user }) => {
+  const handlePinSuccess = ({ mode, user, users }) => {
     if (mode === 'demo') {
       const authData = { mode: 'demo', userId: user.id, userName: user.name };
       sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
       setAuth(authData);
     } else if (mode === 'family') {
+      if (Array.isArray(users)) {
+        setPrefetchedUsers(users);
+      }
       const authData = { mode: 'family', userId: null, userName: null };
       sessionStorage.setItem('ironlog_auth', JSON.stringify(authData));
       setAuth(authData);
@@ -202,6 +206,7 @@ export default function App() {
   if (auth.mode === 'family' && !auth.userId) {
     return (
       <ProfileSelector
+        initialUsers={prefetchedUsers}
         onSelect={handleProfileSelect}
         onSwitchPin={handleResetPin}
         theme={theme}

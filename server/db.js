@@ -164,6 +164,18 @@ async function initDb() {
 
   initPromise = (async () => {
     try {
+      // Fast-path: if latest schema & exercise catalog already exist, skip 30+ DDL/migration queries on cold start
+      try {
+        const fastCheck = await db.execute(
+          'SELECT (SELECT COUNT(*) FROM exercises) AS ex_count, (SELECT has_structured_sets FROM workout_exercises LIMIT 1) AS col_check'
+        );
+        if (fastCheck.rows.length > 0 && Number(fastCheck.rows[0].ex_count) > 0) {
+          return;
+        }
+      } catch (_) {
+        // Table or latest column missing; fall through to full initialization
+      }
+
       // 0. Performance PRAGMAs (WAL mode, memory temp store, 64MB cache)
       try {
         await db.execute('PRAGMA journal_mode = WAL;');

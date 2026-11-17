@@ -11,17 +11,19 @@ const AVATAR_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
-export default function ProfileSelector({ onSelect, onSwitchPin, theme, onToggleTheme }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function ProfileSelector({ initialUsers = null, onSelect, onSwitchPin, theme, onToggleTheme }) {
+  const [users, setUsers] = useState(Array.isArray(initialUsers) ? initialUsers : []);
+  const [loading, setLoading] = useState(!Array.isArray(initialUsers));
   const [showAddForm, setShowAddForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [addingUser, setAddingUser] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadUsers();
-  }, []);
+    if (!Array.isArray(initialUsers)) {
+      loadUsers();
+    }
+  }, [initialUsers]);
 
   const loadUsers = async () => {
     try {
