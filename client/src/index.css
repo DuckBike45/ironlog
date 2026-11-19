@@ -18,6 +18,14 @@ body {
   overscroll-behavior-y: none;
 }
 
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
 
 /* Custom scrollbar for mobile drawers */
 ::-webkit-scrollbar {

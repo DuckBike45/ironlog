@@ -15,7 +15,7 @@ import ExerciseSelectorModal from './ExerciseSelectorModal';
 import KeyboardNavBar from './KeyboardNavBar';
 import { useDragReorder } from '../hooks/useDragReorder';
 
-export default function WorkoutHistory() {
+export default function WorkoutHistory({ isActive = true }) {
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedWorkout, setSelectedWorkout] = useState(null);
@@ -86,15 +86,21 @@ export default function WorkoutHistory() {
     loadHistory();
   }, []);
 
-  const loadHistory = async (forceRefresh = false) => {
+  useEffect(() => {
+    if (isActive) {
+      loadHistory(false, true);
+    }
+  }, [isActive]);
+
+  const loadHistory = async (forceRefresh = false, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const data = await api.getWorkoutHistory(forceRefresh);
       setHistory(data);
     } catch (err) {
       console.error('Failed to load history', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 

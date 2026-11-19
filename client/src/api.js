@@ -44,6 +44,14 @@ let templatesCache = null;
 let templatesCachePromise = null;
 let historyCache = null;
 let historyCachePromise = null;
+const workoutDetailsCache = new Map();
+const exerciseHistoryCache = new Map();
+
+function invalidateWorkoutCaches() {
+  historyCache = null;
+  workoutDetailsCache.clear();
+  exerciseHistoryCache.clear();
+}
 
 export const api = {
   // Session & User Context
@@ -52,7 +60,7 @@ export const api = {
     // Invalidate per-user caches if user changes
     exercisesCache = null;
     templatesCache = null;
-    historyCache = null;
+    invalidateWorkoutCaches();
   },
 
   getUserId: () => currentUserId,
@@ -127,8 +135,15 @@ export const api = {
     return request(`/exercises/${exerciseId}/last-performance?${params.toString()}`);
   },
 
-  getExerciseHistory: (exerciseId) =>
-    request(`/exercises/${exerciseId}/history`),
+  getExerciseHistory: async (exerciseId, forceRefresh = false) => {
+    const key = String(exerciseId);
+    if (!forceRefresh && exerciseHistoryCache.has(key)) {
+      return exerciseHistoryCache.get(key);
+    }
+    const data = await request(`/exercises/${exerciseId}/history`);
+    exerciseHistoryCache.set(key, data);
+    return data;
+  },
 
   // Templates (Cached in-memory for instant tab/modal load)
   getTemplates: async (forceRefresh = false) => {
@@ -190,7 +205,7 @@ export const api = {
     }),
 
   finishWorkout: async (id, notes = '') => {
-    historyCache = null;
+    invalidateWorkoutCaches();
     return request(`/workouts/${id}/finish`, {
       method: 'POST',
       body: JSON.stringify({ notes }),
@@ -198,14 +213,14 @@ export const api = {
   },
 
   discardWorkout: async (id) => {
-    historyCache = null;
+    invalidateWorkoutCaches();
     return request(`/workouts/${id}`, {
       method: 'DELETE',
     });
   },
 
   updateWorkout: async (id, data) => {
-    historyCache = null;
+    invalidateWorkoutCaches();
     return request(`/workouts/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -232,54 +247,78 @@ export const api = {
   },
 
   invalidateHistoryCache: () => {
-    historyCache = null;
+    invalidateWorkoutCaches();
   },
 
-  getWorkoutDetails: (id) => request(`/workouts/${id}`),
+  getWorkoutDetails: async (id, forceRefresh = false) => {
+    const key = String(id);
+    if (!forceRefresh && workoutDetailsCache.has(key)) {
+      return workoutDetailsCache.get(key);
+    }
+    const data = await request(`/workouts/${id}`);
+    workoutDetailsCache.set(key, data);
+    return data;
+  },
 
   // Workout Exercises & Sets
-  addExerciseToWorkout: (workoutId, exerciseId) =>
-    request(`/workouts/${workoutId}/exercises`, {
+  addExerciseToWorkout: async (workoutId, exerciseId) => {
+    invalidateWorkoutCaches();
+    return request(`/workouts/${workoutId}/exercises`, {
       method: 'POST',
       body: JSON.stringify({ exercise_id: exerciseId }),
-    }),
+    });
+  },
 
-  removeExerciseFromWorkout: (workoutExerciseId) =>
-    request(`/workout-exercises/${workoutExerciseId}`, {
+  removeExerciseFromWorkout: async (workoutExerciseId) => {
+    invalidateWorkoutCaches();
+    return request(`/workout-exercises/${workoutExerciseId}`, {
       method: 'DELETE',
-    }),
+    });
+  },
 
-  replaceWorkoutExercise: (workoutExerciseId, newExerciseId) =>
-    request(`/workout-exercises/${workoutExerciseId}`, {
+  replaceWorkoutExercise: async (workoutExerciseId, newExerciseId) => {
+    invalidateWorkoutCaches();
+    return request(`/workout-exercises/${workoutExerciseId}`, {
       method: 'PUT',
       body: JSON.stringify({ exercise_id: newExerciseId }),
-    }),
+    });
+  },
 
-  reorderWorkoutExercises: (workoutId, exerciseOrder) =>
-    request(`/workouts/${workoutId}/exercises/reorder`, {
+  reorderWorkoutExercises: async (workoutId, exerciseOrder) => {
+    invalidateWorkoutCaches();
+    return request(`/workouts/${workoutId}/exercises/reorder`, {
       method: 'PUT',
       body: JSON.stringify({ exercise_order: exerciseOrder }),
-    }),
+    });
+  },
 
-  addSet: (workoutExerciseId, setData) =>
-    request(`/workout-exercises/${workoutExerciseId}/sets`, {
+  addSet: async (workoutExerciseId, setData) => {
+    invalidateWorkoutCaches();
+    return request(`/workout-exercises/${workoutExerciseId}/sets`, {
       method: 'POST',
       body: JSON.stringify(setData),
-    }),
+    });
+  },
 
-  updateSet: (setId, setData) =>
-    request(`/sets/${setId}`, {
+  updateSet: async (setId, setData) => {
+    invalidateWorkoutCaches();
+    return request(`/sets/${setId}`, {
       method: 'PUT',
       body: JSON.stringify(setData),
-    }),
+    });
+  },
 
-  toggleSetComplete: (setId) =>
-    request(`/sets/${setId}/toggle-complete`, {
+  toggleSetComplete: async (setId) => {
+    invalidateWorkoutCaches();
+    return request(`/sets/${setId}/toggle-complete`, {
       method: 'POST',
-    }),
+    });
+  },
 
-  deleteSet: (setId) =>
-    request(`/sets/${setId}`, {
+  deleteSet: async (setId) => {
+    invalidateWorkoutCaches();
+    return request(`/sets/${setId}`, {
       method: 'DELETE',
-    }),
+    });
+  },
 };

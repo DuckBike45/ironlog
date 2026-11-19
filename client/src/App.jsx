@@ -30,6 +30,7 @@ export default function App() {
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [prefetchedUsers, setPrefetchedUsers] = useState(null);
+  const [startingTarget, setStartingTarget] = useState(null);
 
   // Theme state: defaults to 'light'
   const [theme, setTheme] = useState(() => {
@@ -61,6 +62,8 @@ export default function App() {
       api.setUserId(auth.userId);
       checkActiveWorkout();
       loadTemplates();
+      // Silently prefetch exercise catalog so + Add Exercise / Swap opens in 0ms
+      api.getExercises().catch(() => {});
     } else {
       api.setUserId(null);
       setLoading(false);
@@ -143,8 +146,9 @@ export default function App() {
 
   const handleStartWorkout = async (e) => {
     if (e) e.preventDefault();
+    if (startingTarget) return;
     try {
-      setLoading(true);
+      setStartingTarget('blank');
       const name = workoutName.trim() || `Workout - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
       const newWorkout = await api.startWorkout(name);
       setActiveWorkout(newWorkout);
@@ -153,13 +157,14 @@ export default function App() {
     } catch (err) {
       alert(err.message || 'Failed to start workout');
     } finally {
-      setLoading(false);
+      setStartingTarget(null);
     }
   };
 
   const handleStartFromTemplate = async (templateId) => {
+    if (startingTarget) return;
     try {
-      setLoading(true);
+      setStartingTarget(templateId);
       const newWorkout = await api.startWorkoutFromTemplate(templateId);
       setActiveWorkout(newWorkout);
       showToast(`Started workout from template! 💪`);
@@ -167,7 +172,7 @@ export default function App() {
     } catch (err) {
       alert(err.message || 'Failed to start workout from template');
     } finally {
-      setLoading(false);
+      setStartingTarget(null);
     }
   };
 
@@ -335,10 +340,11 @@ export default function App() {
 
                             <button
                               onClick={() => handleStartFromTemplate(tpl.id)}
-                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                              disabled={startingTarget !== null}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-semibold text-xs rounded-xl shadow-sm flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
-                              Start {tpl.name}
+                              {startingTarget === tpl.id ? `Starting ${tpl.name}...` : `Start ${tpl.name}`}
                             </button>
                           </div>
                         ))}
@@ -361,10 +367,11 @@ export default function App() {
                       />
                       <button
                         type="submit"
-                        className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
+                        disabled={startingTarget !== null}
+                        className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 disabled:opacity-60 text-slate-700 dark:text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-1.5 active:scale-95 transition-all"
                       >
                         <Play className="w-3.5 h-3.5 fill-current text-blue-500" />
-                        Start Empty Workout
+                        {startingTarget === 'blank' ? 'Starting Workout...' : 'Start Empty Workout'}
                       </button>
                     </form>
                   </div>
@@ -385,7 +392,7 @@ export default function App() {
 
             {/* History Tab (Preserved in DOM for instant 0ms switching) */}
             <div className={activeTab === 'history' ? 'block' : 'hidden'}>
-              <WorkoutHistory />
+              <WorkoutHistory isActive={activeTab === 'history'} />
             </div>
 
             {/* Exercises Tab (Preserved in DOM for instant 0ms switching) */}
