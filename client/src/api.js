@@ -1,3 +1,5 @@
+import { logError } from './utils/errorLog';
+
 const BASE_URL = '/api';
 
 let currentUserId = null;
@@ -12,10 +14,16 @@ async function request(endpoint, options = {}) {
     headers['X-User-ID'] = String(currentUserId);
   }
 
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let res;
+  try {
+    res = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (networkErr) {
+    logError('api.network', networkErr, { endpoint, method: options.method || 'GET' });
+    throw networkErr;
+  }
 
   if (!res.ok) {
     let errorMsg = 'API request failed';
@@ -23,6 +31,7 @@ async function request(endpoint, options = {}) {
       const data = await res.json();
       errorMsg = data.error || errorMsg;
     } catch (_) {}
+    logError('api.http', errorMsg, { endpoint, status: res.status, method: options.method || 'GET' });
     throw new Error(errorMsg);
   }
 

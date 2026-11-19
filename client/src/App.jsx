@@ -8,6 +8,7 @@ import Navigation from './components/Navigation';
 import TemplateManager from './components/TemplateManager';
 import PinEntry from './components/PinEntry';
 import ProfileSelector from './components/ProfileSelector';
+import { ErrorLogModal } from './components/ErrorBoundary';
 
 export default function App() {
   // Auth state persisted in sessionStorage
@@ -27,6 +28,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState('');
   const [templates, setTemplates] = useState([]);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [showErrorLog, setShowErrorLog] = useState(false);
   const [prefetchedUsers, setPrefetchedUsers] = useState(null);
 
   // Theme state: defaults to 'light'
@@ -366,6 +368,17 @@ export default function App() {
                       </button>
                     </form>
                   </div>
+
+                  {/* Subtle Error Log Trigger */}
+                  <div className="text-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowErrorLog(true)}
+                      className="text-[11px] text-slate-400 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-400 transition-colors"
+                    >
+                      View App Error Log
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -392,6 +405,9 @@ export default function App() {
         }}
         onStartTemplate={handleStartFromTemplate}
       />
+
+      {/* Error Log Modal */}
+      <ErrorLogModal isOpen={showErrorLog} onClose={() => setShowErrorLog(false)} />
 
       {/* Persistent Bottom Mobile Navigation Bar */}
       <Navigation

@@ -339,6 +339,7 @@ async function initDb() {
 
     } catch (err) {
       console.error('Failed to initialize database tables:', err);
+      initPromise = null;
       throw err;
     }
   })();
